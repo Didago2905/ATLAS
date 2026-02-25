@@ -1,0 +1,25 @@
+# Entorno virtual
+.venv/
+venv/
+
+# Base de datos local
+atlas.db
+
+# Archivos Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VS Code
+.vscode/
+
+# Archivos de entorno
+.env
+
+# Logs
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
