@@ -23,3 +23,20 @@ __pycache__/
 # Sistema operativo
 .DS_Store
 Thumbs.db
+
+comandos.txt
+
+# Node
+node_modules/
+dist/
+
+# Python
+vision_env/
+venv/
+__pycache__/
+
+# Env
+.env
+
+# VS Code
+.vscode/

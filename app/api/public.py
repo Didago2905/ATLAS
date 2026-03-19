@@ -23,7 +23,10 @@ def get_beers(
     db: Session = Depends(get_db),
 ):
     query = db.query(Beer)
-
+    query = query.filter(
+    Beer.is_deleted == False,
+    Beer.is_available == True
+)
     # Filtros
     if available is not None:
         query = query.filter(Beer.is_available == available)
