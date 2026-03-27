@@ -20,11 +20,13 @@ class Beer(Base):
     description = Column(Text, nullable=True)
     origin = Column(String(255), nullable=True)
     image_url = Column(String(500), nullable=True)
-    
+
     prices = Column(JSON, nullable=True)
 
-    is_available = Column(Boolean, default=False)
-    is_deleted = Column(Boolean, default=False)
+    # 🔐 Defaults seguros
+    is_available = Column(Boolean, default=True, nullable=False)
+    is_deleted = Column(Boolean, default=False, nullable=False)
 
+    # ⏱️ Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

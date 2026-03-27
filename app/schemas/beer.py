@@ -12,6 +12,7 @@ class BeerCreate(BaseModel):
     description: Optional[str] = None
     origin: Optional[str] = None
     image_url: Optional[str] = None
+    prices: Optional[Dict[str, float]] = None  # 🔥 AGREGAR
 
 
 class BeerResponse(BaseModel):

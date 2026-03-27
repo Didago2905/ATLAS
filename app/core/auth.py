@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
-from jose import JWTError, jwt
+from jose import jwt
+from app.core.config import settings
 
-SECRET_KEY = "super-secret-key"  # 🔥 cambiar después
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -12,6 +12,6 @@ def create_access_token(data: dict):
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
 
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
 
     return encoded_jwt

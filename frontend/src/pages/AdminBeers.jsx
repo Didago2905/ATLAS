@@ -12,6 +12,13 @@ export default function AdminBeers() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
 
+    // 🔍 NUEVO
+    const [search, setSearch] = useState("");
+
+    const filteredBeers = beers.filter(beer =>
+        beer.name.toLowerCase().includes(search.toLowerCase())
+    );
+
     const handleEdit = (beer) => {
         setSelectedBeer({ ...beer }); // 🔥 clon
         setIsCreating(false);
@@ -33,7 +40,6 @@ export default function AdminBeers() {
     const handleSave = async (data) => {
         try {
 
-            // 🔥 LIMPIAMOS EL PAYLOAD
             const cleanData = {
                 name: data.name || "",
                 brewery: data.brewery || "Tiburón",
@@ -66,17 +72,35 @@ export default function AdminBeers() {
         }
     };
 
-
     return (
         <div>
 
             {/* 🔥 HEADER ADMIN */}
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1rem" }}>
-
                 <h1>Admin Beers</h1>
-
-
             </div>
+
+            {/* 🔍 BUSCADOR (AQUÍ VA TU RECUADRO ROJO) */}
+            <input
+                type="text"
+                placeholder="Buscar cerveza..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{
+                    marginBottom: "20px",
+                    padding: "10px",
+                    width: "300px",
+                    borderRadius: "8px",
+                    border: "1px solid #333",
+                    background: "#111",
+                    color: "#fff"
+                }}
+            />
+
+            {/* 📊 CONTADOR */}
+            <p style={{ opacity: 0.6 }}>
+                {filteredBeers.length} resultados
+            </p>
 
             {/* 🔥 ACCIONES */}
             <button onClick={handleAddBeer}>
@@ -84,7 +108,7 @@ export default function AdminBeers() {
             </button>
 
             <AdminBeerTable
-                beers={beers}
+                beers={filteredBeers}
                 onEdit={handleEdit}
                 refresh={fetchAdminBeers}
             />

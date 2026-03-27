@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { fetchBeers } from "../api/beers";
+import { fetchPublicBeers } from "../api/beers";
 
 export function usePublicBeers() {
 
@@ -7,7 +7,7 @@ export function usePublicBeers() {
 
     const loadBeers = async () => {
         try {
-            const data = await fetchBeers(); // 🔥 endpoint público
+            const data = await fetchPublicBeers();
             setBeers(data);
         } catch (error) {
             console.error("ERROR FETCHING PUBLIC BEERS:", error);

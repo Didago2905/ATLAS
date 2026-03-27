@@ -7,7 +7,7 @@ from app.models.beer import Beer
 from app.schemas.beer import BeerResponse
 
 
-router = APIRouter(tags=["Public"])
+router = APIRouter(prefix="/public", tags=["Public"])
 
 
 @router.get("/beers", response_model=List[BeerResponse])
@@ -23,14 +23,17 @@ def get_beers(
     db: Session = Depends(get_db),
 ):
     query = db.query(Beer)
-    query = query.filter(
-    Beer.is_deleted == False,
-    Beer.is_available == True
-)
-    # Filtros
+
+    # Base: no eliminadas
+    query = query.filter(Beer.is_deleted == False)
+
+    # Available controlado
     if available is not None:
         query = query.filter(Beer.is_available == available)
+    else:
+        query = query.filter(Beer.is_available == True)
 
+    # Filtros
     if style:
         query = query.filter(Beer.style.ilike(f"%{style}%"))
 
@@ -40,7 +43,7 @@ def get_beers(
     if max_abv is not None:
         query = query.filter(Beer.abv <= max_abv)
 
-    # Ordenamiento dinámico seguro
+    # Ordenamiento dinámico
     if hasattr(Beer, order_by):
         column = getattr(Beer, order_by)
         if direction == "desc":

@@ -22,7 +22,16 @@ from app.schemas.beer import BeerCreate
 
 
 def create_beer(db: Session, beer_data: BeerCreate):
-    new_beer = Beer(**beer_data.dict())
+    data = beer_data.dict()
+    
+    # Asegurar defaults
+    if "is_available" not in data or data["is_available"] is None:
+        data["is_available"] = True
+        
+    if "is_deleted" not in data or data["is_deleted"] is None:
+        data["is_deleted"] = False
+        
+    new_beer = Beer(**data)          
 
     db.add(new_beer)
     db.commit()

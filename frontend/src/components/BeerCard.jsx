@@ -1,42 +1,46 @@
 import { formatABV } from "../utils/formatters";
+import { resolveColor, colorLabelMap } from "../utils/colorUtils";
 
-const colorMap = {
-    "Ámbar": "#d88c00",
-    "Dorado": "#e6b800",
-    "Negro": "#111111",
-    "Rojo": "#8b3a3a",
-    "Rosa": "#ff2b5b",
-    "Cobrizo": "#b87333",
+// 🔥 detectar si el color es oscuro (luminancia real)
+const isDarkColor = (hex) => {
+    if (!hex || !hex.startsWith("#")) return false;
 
-    "#d88c00": "#d88c00",
-    "#e6b800": "#e6b800",
-    "#111111": "#111111",
-    "#8b3a3a": "#8b3a3a",
-    "#ff2b5b": "#ff2b5b",
-    "#b87333": "#b87333"
-}
+    const r = parseInt(hex.substr(1, 2), 16);
+    const g = parseInt(hex.substr(3, 2), 16);
+    const b = parseInt(hex.substr(5, 2), 16);
 
-const colorLabelMap = {
-    "#d88c00": "Ámbar",
-    "#e6b800": "Dorado",
-    "#111111": "Negro",
-    "#8b3a3a": "Rojo",
-    "#ff2b5b": "Rosa",
-    "#b87333": "Cobrizo"
-}
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+
+    return luminance < 60;
+};
+
+// 🔥 ajustar color solo si es demasiado oscuro
+const adjustColorForUI = (hex) => {
+    if (isDarkColor(hex)) {
+        return "#444444"; // gris visible pero coherente
+    }
+    return hex;
+};
 
 export default function BeerCard({ beer }) {
 
-    const beerColor =
-        colorMap[beer.color] || (beer.color?.startsWith("#") ? beer.color : "#444")
+    // 🔥 color base
+    const rawColor = resolveColor(beer.color);
 
-    const normalizedColor = beer.color?.trim().toLowerCase()
-    const colorLabel = colorLabelMap[normalizedColor] || beer.color
+    // 🔥 color ajustado para UI
+    const beerColor = adjustColorForUI(rawColor);
+
+    // 🔥 label
+    const colorLabel =
+        colorLabelMap[rawColor] || beer.color;
 
     return (
         <div
             className="beer-card"
-            style={{ borderTop: `6px solid ${beerColor}` }}
+            style={{
+                borderTop: `6px solid ${beerColor}`,
+                boxShadow: `0 0 6px ${beerColor}` // 🔥 glow sutil
+            }}
         >
 
             <h2>{beer.name}</h2>

@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:8001";
+const API_URL = import.meta.env.VITE_API_URL;
 
 // 🔐 Helper para headers con token automático
 const getAuthHeaders = () => {
@@ -14,10 +14,9 @@ const getAuthHeaders = () => {
 // PUBLIC
 // =========================
 
-export async function fetchBeers() {
-    const res = await fetch(`${API_URL}/beers`);
-
-    if (!res.ok) throw new Error("Error fetching beers");
+export async function fetchPublicBeers() {
+    const res = await fetch(`${API_URL}/public/beers?limit=100`)
+    if (!res.ok) throw new Error("Error fetching public beers");
 
     return res.json();
 }
@@ -27,7 +26,7 @@ export async function fetchBeers() {
 // =========================
 
 export async function fetchAdminBeers() {
-    const res = await fetch(`${API_URL}/admin/beers`, {
+    const res = await fetch(`${API_URL}/admin/beers?limit=100`, {
         headers: getAuthHeaders()
     });
 
@@ -60,7 +59,6 @@ export async function updateBeer(id, data) {
     return res.json();
 }
 
-// (opcional, ya casi no necesario)
 export async function toggleTap(id, value) {
     const res = await fetch(`${API_URL}/admin/beers/${id}`, {
         method: "PUT",
@@ -74,7 +72,7 @@ export async function toggleTap(id, value) {
 }
 
 export async function adminLogin(password) {
-    const res = await fetch("http://localhost:8001/admin/login", {
+    const res = await fetch(`${API_URL}/admin/login`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"

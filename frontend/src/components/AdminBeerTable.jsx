@@ -1,11 +1,4 @@
-const colorLabelMap = {
-    "#d88c00": "Ámbar",
-    "#e6b800": "Dorado",
-    "#111111": "Negro",
-    "#8b3a3a": "Rojo",
-    "#ff2b5b": "Rosa",
-    "#b87333": "Cobrizo"
-}
+import { colorLabelMap } from "../utils/colorUtils";
 
 import { updateBeer } from "../api/beers"
 
@@ -42,8 +35,13 @@ export default function AdminBeerTable({ beers, token, refresh, onEdit }) {
             </thead>
 
             <tbody>
-                {beers.map((beer) => (
-                    <tr key={beer.id}>
+                {beers.map((beer, index) => (
+                    <tr
+                        key={beer.id}
+                        style={{
+                            backgroundColor: index % 2 === 0 ? "#000" : "#1a1a1a"
+                        }}
+                    >
 
                         <td>{beer.name}</td>
                         <td>{beer.style}</td>
