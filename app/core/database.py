@@ -10,7 +10,7 @@ DATABASE_URL = settings.database_url
 # ⚙️ Engine
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False}  # solo para SQLite
+    connect_args={"check_same_thread": False, "timeout": 15}  # solo para SQLite
 )
 
 # 🧠 Sesión

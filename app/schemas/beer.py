@@ -12,7 +12,8 @@ class BeerCreate(BaseModel):
     description: Optional[str] = None
     origin: Optional[str] = None
     image_url: Optional[str] = None
-    prices: Optional[Dict[str, float]] = None  # 🔥 AGREGAR
+    prices: Optional[Dict[str, float]] = None
+    tap_position: Optional[int] = None  # 🔥 NUEVO
 
 
 class BeerResponse(BaseModel):
@@ -29,11 +30,11 @@ class BeerResponse(BaseModel):
     description: Optional[str]
     origin: Optional[str]
     image_url: Optional[str]
-    
+
     prices: Optional[Dict[str, float]] = None
 
     is_available: bool
-    
+    tap_position: Optional[int]  # 🔥 NUEVO
 
     class Config:
         from_attributes = True
@@ -41,9 +42,6 @@ class BeerResponse(BaseModel):
 
 class BeerAvailabilityUpdate(BaseModel):
     is_available: bool
-
-
-from typing import Optional
 
 
 class BeerUpdate(BaseModel):
@@ -59,7 +57,8 @@ class BeerUpdate(BaseModel):
     description: Optional[str] = None
     origin: Optional[str] = None
     image_url: Optional[str] = None
-    
+
     prices: Optional[Dict[str, float]] = None
 
     is_available: Optional[bool] = None
+    tap_position: Optional[int] = None  # 🔥 NUEVO

@@ -6,6 +6,9 @@ from app.core.database import get_db
 from app.models.beer import Beer
 from app.schemas.beer import BeerResponse
 
+# 🔥 IMPORT DIRECTO (FIX)
+from app.services.beer_service import get_tap_beers
+
 
 router = APIRouter(prefix="/public", tags=["Public"])
 
@@ -57,3 +60,9 @@ def get_beers(
     query = query.offset(skip).limit(limit)
 
     return query.all()
+
+
+# 🔥 ENDPOINT TAP (FIX)
+@router.get("/tap", response_model=List[BeerResponse])
+def get_tap(db: Session = Depends(get_db)):
+    return get_tap_beers(db)

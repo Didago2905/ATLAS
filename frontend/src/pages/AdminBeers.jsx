@@ -11,16 +11,17 @@ export default function AdminBeers() {
     const [selectedBeer, setSelectedBeer] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
-
-    // 🔍 NUEVO
     const [search, setSearch] = useState("");
+
+    // 🔥 NUEVO: obtener token
+    const token = localStorage.getItem("token");
 
     const filteredBeers = beers.filter(beer =>
         beer.name.toLowerCase().includes(search.toLowerCase())
     );
 
     const handleEdit = (beer) => {
-        setSelectedBeer({ ...beer }); // 🔥 clon
+        setSelectedBeer({ ...beer });
         setIsCreating(false);
         setIsModalOpen(true);
     };
@@ -55,10 +56,8 @@ export default function AdminBeers() {
             };
 
             if (isCreating) {
-                console.log("CREATING BEER...");
                 await createBeer(cleanData);
             } else {
-                console.log("UPDATING BEER...");
                 await updateBeer(selectedBeer.id, cleanData);
             }
 
@@ -66,8 +65,7 @@ export default function AdminBeers() {
             handleCloseModal();
 
         } catch (error) {
-            console.error("ERROR COMPLETO:", error);
-            console.error("RESPONSE:", error?.response?.data);
+            console.error(error);
             alert(JSON.stringify(error?.response?.data || error.message));
         }
     };
@@ -75,12 +73,8 @@ export default function AdminBeers() {
     return (
         <div>
 
-            {/* 🔥 HEADER ADMIN */}
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1rem" }}>
-                <h1>Admin Beers</h1>
-            </div>
+            <h1>Admin Beers</h1>
 
-            {/* 🔍 BUSCADOR (AQUÍ VA TU RECUADRO ROJO) */}
             <input
                 type="text"
                 placeholder="Buscar cerveza..."
@@ -89,7 +83,8 @@ export default function AdminBeers() {
                 style={{
                     marginBottom: "20px",
                     padding: "10px",
-                    width: "300px",
+                    width: "100%",
+                    maxWidth: "300px",
                     borderRadius: "8px",
                     border: "1px solid #333",
                     background: "#111",
@@ -97,18 +92,17 @@ export default function AdminBeers() {
                 }}
             />
 
-            {/* 📊 CONTADOR */}
             <p style={{ opacity: 0.6 }}>
                 {filteredBeers.length} resultados
             </p>
 
-            {/* 🔥 ACCIONES */}
             <button onClick={handleAddBeer}>
                 Add Beer
             </button>
 
             <AdminBeerTable
                 beers={filteredBeers}
+                token={token} // 🔥 FIX CLAVE
                 onEdit={handleEdit}
                 refresh={fetchAdminBeers}
             />

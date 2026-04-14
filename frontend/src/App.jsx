@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-
+import BeerDetail from "./pages/BeerDetail";
 import Home from "./pages/Home";
 import AdminBeers from "./pages/AdminBeers";
 import AdminLogin from "./pages/AdminLogin";
@@ -37,6 +37,8 @@ export default function App() {
 
         {/* 🟢 Público */}
         <Route path="/" element={<Home />} />
+
+        <Route path="/beer/:id" element={<BeerDetail />} />
 
         {/* 🔐 Login */}
         <Route path="/login" element={<LoginWrapper />} />

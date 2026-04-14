@@ -23,6 +23,9 @@ class Beer(Base):
 
     prices = Column(JSON, nullable=True)
 
+    # 🔥 NUEVO → control del tap
+    tap_position = Column(Integer, nullable=True)
+
     # 🔐 Defaults seguros
     is_available = Column(Boolean, default=True, nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)

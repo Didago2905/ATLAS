@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = "/api";
 
 // 🔐 Helper para headers con token automático
 const getAuthHeaders = () => {
@@ -15,7 +15,8 @@ const getAuthHeaders = () => {
 // =========================
 
 export async function fetchPublicBeers() {
-    const res = await fetch(`${API_URL}/public/beers?limit=100`)
+    const res = await fetch(`${API_URL}/public/beers?limit=100`);
+
     if (!res.ok) throw new Error("Error fetching public beers");
 
     return res.json();
@@ -30,6 +31,12 @@ export async function fetchAdminBeers() {
         headers: getAuthHeaders()
     });
 
+    if (res.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+        return [];
+    }
+
     if (!res.ok) throw new Error("Error fetching admin beers");
 
     return res.json();
@@ -41,6 +48,12 @@ export async function createBeer(data) {
         headers: getAuthHeaders(),
         body: JSON.stringify(data)
     });
+
+    if (res.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+        return;
+    }
 
     if (!res.ok) throw new Error("Error creating beer");
 
@@ -54,6 +67,12 @@ export async function updateBeer(id, data) {
         body: JSON.stringify(data)
     });
 
+    if (res.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+        return;
+    }
+
     if (!res.ok) throw new Error("Error updating beer");
 
     return res.json();
@@ -65,6 +84,12 @@ export async function toggleTap(id, value) {
         headers: getAuthHeaders(),
         body: JSON.stringify({ is_available: value })
     });
+
+    if (res.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+        return;
+    }
 
     if (!res.ok) throw new Error("Error toggling beer");
 

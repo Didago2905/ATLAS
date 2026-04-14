@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
+from sqlalchemy import case
+import shutil
+import os
 
 from app.core.database import get_db
 from app.core.security import verify_token
@@ -14,7 +17,6 @@ from app.schemas.beer import (
 from app.services import beer_service
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
-
 
 from pydantic import BaseModel
 from app.core.auth import create_access_token
@@ -83,14 +85,11 @@ def list_beers_admin(
 ):
     query = db.query(Beer)
 
-    if hasattr(Beer, order_by):
-        column = getattr(Beer, order_by)
-        if direction == "desc":
-            query = query.order_by(column.desc())
-        else:
-            query = query.order_by(column.asc())
-    else:
-        query = query.order_by(Beer.created_at.desc())
+    query = query.order_by(
+        case((Beer.tap_position != None, 0), else_=1),
+        Beer.tap_position.asc(),
+        Beer.created_at.desc()
+    )
 
     query = query.offset(skip).limit(limit)
 
@@ -116,3 +115,57 @@ def beer_stats(
     _=Depends(verify_token),
 ):
     return beer_service.get_beer_stats(db)
+
+
+# 🔥 NUEVO ENDPOINT — UPLOAD IMAGEN
+from fastapi import UploadFile, File, HTTPException
+from PIL import Image
+import os
+
+@router.post("/beers/{beer_id}/upload-image")
+def upload_beer_image(
+    beer_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _=Depends(verify_token),
+):
+
+    # 📁 carpeta destino
+    folder = "frontend/public/images/beerTablesTapList"
+    os.makedirs(folder, exist_ok=True)
+
+    file_path = f"{folder}/{beer_id}.jpg"
+
+    # 🔥 abrir imagen con PIL
+    try:
+        img = Image.open(file.file)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image file")
+
+    # 🔥 convertir a RGB (evita errores con PNG / transparencias)
+    img = img.convert("RGB")
+
+    # 🔥 resize inteligente (mantiene proporción)
+    img.thumbnail((600, 800))
+
+    # 🔥 guardar optimizado
+    img.save(
+        file_path,
+        format="JPEG",
+        quality=75,
+        optimize=True,
+        progressive=True  # 🔥 carga progresiva (pro)
+    )
+
+    # 🌐 ruta pública
+    image_url = f"/images/beerTablesTapList/{beer_id}.jpg"
+
+    # 💾 guardar en DB
+    beer = db.query(Beer).get(beer_id)
+    if not beer:
+        raise HTTPException(status_code=404, detail="Beer not found")
+
+    beer.image_url = image_url
+    db.commit()
+
+    return {"image_url": image_url}

@@ -1,44 +1,36 @@
 import { useState } from "react";
 import Layout from "../layout/Layout";
-import BeerList from "../components/BeerList";
-import { usePublicBeers } from "../hooks/usePublicBeers";
+import TapGrid from "../components/TapGrid";
 
 export default function Home() {
 
-    const { beers } = usePublicBeers();
-
-    const [search, setSearch] = useState("");
-
-    const filteredBeers = beers.filter(beer =>
-        beer.name.toLowerCase().includes(search.toLowerCase())
-    );
+    const [sort, setSort] = useState("tap");
 
     return (
         <Layout>
 
-            {/* 🔍 Buscador */}
-            <input
-                type="text"
-                placeholder="Buscar cerveza..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{
-                    marginBottom: "20px",
-                    padding: "10px",
-                    width: "300px",
-                    borderRadius: "8px",
-                    border: "1px solid #333",
-                    background: "#111",
-                    color: "#fff"
-                }}
-            />
+            {/* 🎛️ CONTROL SIMPLE */}
+            <div style={{ marginBottom: "20px" }}>
+                <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value)}
+                    style={{
+                        padding: "10px",
+                        borderRadius: "8px",
+                        background: "#111",
+                        color: "#fff",
+                        border: "1px solid #333"
+                    }}
+                >
+                    <option value="tap">Orden del Tap</option>
+                    <option value="abv">Alcohol</option>
+                    <option value="name">Nombre</option>
+                    <option value="style">Estilo</option>
+                </select>
+            </div>
 
-            {/* 📊 Contador opcional */}
-            <p style={{ opacity: 0.6 }}>
-                {filteredBeers.length} resultados
-            </p>
-
-            <BeerList beers={filteredBeers} />
+            {/* 🍺 TAP GRID */}
+            <TapGrid sort={sort} />
 
         </Layout>
     );
