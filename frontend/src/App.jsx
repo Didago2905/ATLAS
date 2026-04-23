@@ -5,6 +5,8 @@ import AdminBeers from "./pages/AdminBeers";
 import AdminLogin from "./pages/AdminLogin";
 import AdminLayout from "./layout/AdminLayout";
 import AdminParser from "./pages/AdminParser";
+import Museum from "./pages/Museum";
+import AdminMuseum from "./pages/AdminMuseum";
 
 // 🔒 Protección de rutas
 function ProtectedRoute({ children }) {
@@ -24,7 +26,7 @@ function LoginWrapper() {
   return (
     <AdminLogin
       onLogin={() => {
-        navigate("/admin/beers"); // 🔥 navegación correcta
+        navigate("/admin/beers");
       }}
     />
   );
@@ -37,8 +39,8 @@ export default function App() {
 
         {/* 🟢 Público */}
         <Route path="/" element={<Home />} />
-
         <Route path="/beer/:id" element={<BeerDetail />} />
+        <Route path="/museum" element={<Museum />} />
 
         {/* 🔐 Login */}
         <Route path="/login" element={<LoginWrapper />} />
@@ -53,11 +55,10 @@ export default function App() {
           }
         >
 
-          {/* 🔥 Default route */}
+          {/* 🔥 Default */}
           <Route index element={<Navigate to="beers" replace />} />
 
           <Route path="beers" element={<AdminBeers />} />
-
           <Route path="parser" element={<AdminParser />} />
 
           <Route
@@ -68,6 +69,9 @@ export default function App() {
               </div>
             }
           />
+
+          {/* 🔥 NUEVO — MUSEUM */}
+          <Route path="museum" element={<AdminMuseum />} />
 
         </Route>
 
