@@ -8,6 +8,15 @@ export default function TapGrid({ sort }) {
     const navigate = useNavigate();
     const [exiting, setExiting] = useState(false);
 
+    useEffect(() => {
+        if (sort) {
+            localStorage.setItem(
+                "tapFilter",
+                JSON.stringify({ sort })
+            );
+        }
+    }, [sort]);
+
     // 🔥 ORDEN
     const sortedBeers = [...beers].sort((a, b) => {
         if (sort === "abv") return (b.abv || 0) - (a.abv || 0);
@@ -89,8 +98,13 @@ export default function TapGrid({ sort }) {
                                     setExiting(true);
 
                                     setTimeout(() => {
-                                        navigate(`/beer/${beer.id}`);
-                                    }, 280); // 🔥 tiempo alineado con animación
+                                        navigate(`/beer/${beer.id}`, {
+                                            state: {
+                                                beers: tapBeers,   // 🔥 ORDEN ACTUAL
+                                                currentIndex: index
+                                            }
+                                        });
+                                    }, 280);
                                 }}
                                 style={{
                                     position: "relative",

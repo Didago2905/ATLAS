@@ -109,6 +109,12 @@ export default function AdminLayout() {
                             Stats
                         </Link>
                     </p>
+
+                    <p>
+                        <Link to="/admin/museum" onClick={() => setMenuOpen(false)}>
+                            Museum
+                        </Link>
+                    </p>
                 </div>
 
                 {/* 🔥 OVERLAY */}

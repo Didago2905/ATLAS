@@ -14,6 +14,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
+
+      // 🔥 NUEVO — STATIC (museum images)
+      "/static": {
+        target: "http://localhost:8001",
+        changeOrigin: true,
+      },
     },
   },
 })

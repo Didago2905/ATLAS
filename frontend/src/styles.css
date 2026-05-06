@@ -4,6 +4,12 @@ body {
     font-family: Arial, sans-serif;
 }
 
+/* 🔥 NUEVO: bloquear scroll cuando se active */
+.no-scroll {
+    overflow: hidden;
+    height: 100vh;
+}
+
 .beer-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -11,18 +17,41 @@ body {
     padding: 20px;
 }
 
+/* 🔥 CONTENEDOR PRINCIPAL */
 .beer-card {
     background: #1f1f1f;
     border-radius: 12px;
     padding: 18px;
-    transition: transform 0.2s;
+    position: relative;
+    overflow: hidden;
+
+    transition:
+        transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
+
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
 }
 
-.beer-card:hover {
-    transform: scale(1.03);
+/* Hover solo desktop */
+@media (hover: hover) {
+    .beer-card:hover {
+        transform: scale(1.02);
+    }
 }
 
+/* 🔥 CONTENIDO NORMAL (ya no es capa absoluta) */
+.beer-content {
+    padding: 18px;
+    box-sizing: border-box;
+}
+
+/* Estado activo */
+.beer-card.show-art {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.7);
+}
+
+/* Texto */
 .beer-card h2 {
     margin-top: 0;
     color: #f4b400;
@@ -34,6 +63,7 @@ body {
     color: #ccc;
 }
 
+/* Admin */
 .admin-table {
     width: 100%;
     border-collapse: collapse;
@@ -54,6 +84,7 @@ body {
     padding: 6px 10px;
 }
 
+/* Modal */
 .modal-overlay {
     position: fixed;
     top: 0;

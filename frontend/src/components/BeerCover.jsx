@@ -32,17 +32,18 @@ export default function BeerCover({ beer, onClick }) {
             const distance = elementCenter - centerX;
             const normalized = distance / centerX;
 
-            // 🔥 3D
+            // 🔥 INTENSIDAD
             const intensity = Math.min(Math.abs(normalized), 1);
 
-            const scale = 1 - intensity * 0.35;
-            const rotate = normalized * 50;
-            const translateZ = -intensity * 120;
+            // 🔥 CUANTIZACIÓN (ANTI-GLITTER)
+            const scale = Math.round((1 - intensity * 0.35) * 1000) / 1000;
+            const rotate = Math.round(normalized * 40);
+            const translateZ = Math.round(-intensity * 90);
 
             const opacity = 1 - Math.min(Math.abs(normalized) * 0.6, 0.6);
             const zIndex = 1000 - Math.abs(Math.round(normalized * 1000));
 
-            // 🔥 SHADING (tu versión actual)
+            // 🔥 SHADING (sin cambios)
             let shading = 0;
 
             if (normalized > 0.35) shading = 0.20;
@@ -50,7 +51,7 @@ export default function BeerCover({ beer, onClick }) {
             else if (normalized < -0.35) shading = -0.20;
             else if (normalized < -0.1) shading = -0.10;
 
-            // 🔥 BLUR CUANTIZADO (NUEVO)
+            // 🔥 BLUR (cuantizado)
             let blur = 0;
 
             if (Math.abs(normalized) > 0.4) blur = 2;
@@ -62,6 +63,7 @@ export default function BeerCover({ beer, onClick }) {
                     translateZ(${translateZ}px)
                     scale(${scale})
                     rotateY(${rotate}deg)
+                    translateZ(0)
                 `,
                 opacity,
                 zIndex,
@@ -127,7 +129,12 @@ export default function BeerCover({ beer, onClick }) {
                 cursor: "pointer",
                 scrollSnapAlign: "center",
                 transformOrigin: "center center",
+
+                backfaceVisibility: "hidden",
+                willChange: "transform",
+
                 ...styleState,
+
                 transition: "transform 0.25s ease, opacity 0.25s ease",
             }}
         >
@@ -136,18 +143,20 @@ export default function BeerCover({ beer, onClick }) {
                     key={beer.image_url}
                     src={getImageSrc()}
                     alt={beer.name}
+                    draggable={false}
                     style={{
                         width: "100%",
                         height: "100%",
                         objectFit: "cover",
-
-                        // 🔥 BLUR APLICADO
                         filter: `blur(${styleState.blur || 0}px)`,
+                        userSelect: "none",
+                        WebkitUserSelect: "none",
+                        WebkitTouchCallout: "none",
                     }}
                 />
             )}
 
-            {/* 🔥 SHADING */}
+            {/* SHADING */}
             <div
                 style={{
                     position: "absolute",

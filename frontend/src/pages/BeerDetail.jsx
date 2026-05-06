@@ -2,14 +2,27 @@ import { useParams, useNavigate } from "react-router-dom";
 import useTapBeers from "../hooks/useTapBeers";
 import BeerCard from "../components/BeerCard";
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 
 export default function BeerDetail() {
     const { id } = useParams();
-    const beers = useTapBeers();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    const beersFromState = location.state?.beers;
+    const indexFromState = location.state?.currentIndex;
+
+    const [stableBeers, setStableBeers] = useState(null);
+
+    const fallbackBeers = useTapBeers();
+    const beers = stableBeers || fallbackBeers;
 
     const beer = beers.find((b) => String(b.id) === id);
-    const index = beers.findIndex((b) => String(b.id) === id);
+
+    const index =
+        indexFromState !== undefined
+            ? indexFromState
+            : beers.findIndex((b) => String(b.id) === id);
 
     const prevBeer = beers[index - 1];
     const nextBeer = beers[index + 1];
@@ -18,9 +31,18 @@ export default function BeerDetail() {
     const [direction, setDirection] = useState(null);
     const [animating, setAnimating] = useState(false);
 
+    const [viewMode, setViewMode] = useState("info");
+
     const startX = useRef(0);
+    const pressTimer = useRef(null);
 
     const isMobile = window.innerWidth < 768;
+
+    useEffect(() => {
+        if (beersFromState && !stableBeers) {
+            setStableBeers(beersFromState);
+        }
+    }, [beersFromState]);
 
     useEffect(() => {
         setVisible(true);
@@ -46,14 +68,14 @@ export default function BeerDetail() {
                 background: "#000",
                 display: "flex",
                 justifyContent: "center",
-                alignItems: "flex-start", // 🔥 importante
+                alignItems: "flex-start",
                 position: "relative",
                 overflowY: "auto",
                 paddingTop: "60px",
                 paddingBottom: "40px"
             }}
         >
-            {/* 🔙 BACK */}
+            {/* BACK */}
             <div
                 style={{
                     position: "absolute",
@@ -90,8 +112,16 @@ export default function BeerDetail() {
                 }}
                 onTouchStart={(e) => {
                     startX.current = e.touches[0].clientX;
+
+                    pressTimer.current = setTimeout(() => {
+                        setViewMode((prev) =>
+                            prev === "info" ? "art" : "info"
+                        );
+                    }, 450);
                 }}
                 onTouchEnd={(e) => {
+                    clearTimeout(pressTimer.current);
+
                     const endX = e.changedTouches[0].clientX;
                     const delta = endX - startX.current;
 
@@ -100,7 +130,13 @@ export default function BeerDetail() {
                         setAnimating(true);
 
                         setTimeout(() => {
-                            navigate(`/beer/${prevBeer.id}`, { replace: true });
+                            navigate(`/beer/${prevBeer.id}`, {
+                                replace: true,
+                                state: {
+                                    beers,
+                                    currentIndex: index - 1
+                                }
+                            });
                         }, 120);
                     }
 
@@ -109,17 +145,29 @@ export default function BeerDetail() {
                         setAnimating(true);
 
                         setTimeout(() => {
-                            navigate(`/beer/${nextBeer.id}`, { replace: true });
+                            navigate(`/beer/${nextBeer.id}`, {
+                                replace: true,
+                                state: {
+                                    beers,
+                                    currentIndex: index + 1
+                                }
+                            });
                         }, 120);
                     }
                 }}
             >
 
-                {/* FLECHAS SOLO PC */}
+                {/* FLECHAS */}
                 {!isMobile && prevBeer && (
                     <div
                         onClick={() =>
-                            navigate(`/beer/${prevBeer.id}`, { replace: true })
+                            navigate(`/beer/${prevBeer.id}`, {
+                                replace: true,
+                                state: {
+                                    beers,
+                                    currentIndex: index - 1
+                                }
+                            })
                         }
                         style={{
                             position: "absolute",
@@ -138,7 +186,13 @@ export default function BeerDetail() {
                 {!isMobile && nextBeer && (
                     <div
                         onClick={() =>
-                            navigate(`/beer/${nextBeer.id}`, { replace: true })
+                            navigate(`/beer/${nextBeer.id}`, {
+                                replace: true,
+                                state: {
+                                    beers,
+                                    currentIndex: index + 1
+                                }
+                            })
                         }
                         style={{
                             position: "absolute",
@@ -161,29 +215,81 @@ export default function BeerDetail() {
                         maxWidth: "360px",
                         display: "flex",
                         justifyContent: "center",
+
+                        contain: "layout paint", // 🔥 PASO 2
                     }}
                 >
                     <div
                         style={{
                             width: "100%",
-                            height: "100%",
 
                             opacity: animating ? 0.6 : (visible ? 1 : 0.2),
 
-                            transform: animating
-                                ? direction === "left"
-                                    ? "translateX(-20px) scale(0.96)"
-                                    : "translateX(20px) scale(0.96)"
-                                : visible
-                                    ? "translateY(0px) scale(1)"
-                                    : "translateY(30px) scale(0.92)",
+                            transform: (
+                                animating
+                                    ? direction === "left"
+                                        ? "translateX(-20px) scale(0.96)"
+                                        : "translateX(20px) scale(0.96)"
+                                    : visible
+                                        ? "translateY(0px) scale(1)"
+                                        : "translateY(30px) scale(0.92)"
+                            ) + " translateZ(0)", // 🔥 PASO 1
+
+                            willChange: "transform", // 🔥 PASO 1
 
                             transition: animating
                                 ? "all 0.12s ease"
                                 : "all 0.45s cubic-bezier(0.22, 1, 0.36, 1)",
                         }}
                     >
-                        <BeerCard beer={beer} />
+                        <div style={{ position: "relative", width: "100%" }}>
+
+                            {/* INFO */}
+                            <div
+                                style={{
+                                    opacity: viewMode === "info" ? 1 : 0,
+                                    transform: viewMode === "info" ? "scale(1)" : "scale(0.96)",
+                                    transition: "all 0.25s ease",
+                                }}
+                            >
+                                <BeerCard beer={beer} />
+                            </div>
+
+                            {/* ARTE */}
+                            {viewMode === "art" && (
+                                <div
+                                    style={{
+                                        position: "absolute",
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        display: "flex",
+                                        justifyContent: "center",
+                                        alignItems: "center",
+                                        background: "#000",
+                                        opacity: 1,
+                                        transition: "opacity 0.25s ease",
+                                    }}
+                                >
+                                    <img
+                                        src={beer.image_url}
+                                        draggable={false}
+                                        onContextMenu={(e) => e.preventDefault()}
+                                        style={{
+                                            width: "100%",
+                                            height: "100%",
+                                            objectFit: "contain",
+                                            userSelect: "none",
+                                            WebkitUserSelect: "none",
+                                            WebkitTouchCallout: "none",
+                                            pointerEvents: "auto",
+                                        }}
+                                    />
+                                </div>
+                            )}
+
+                        </div>
                     </div>
                 </div>
 

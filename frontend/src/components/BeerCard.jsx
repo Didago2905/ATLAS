@@ -25,9 +25,12 @@ const adjustColorForUI = (hex) => {
 export default function BeerCard({ beer }) {
 
     const [showBrewery, setShowBrewery] = useState(false);
-    const panelRef = useRef(null); // 🔥 AQUÍ VA
 
-    // 🔥 click fuera
+    const [showArt, setShowArt] = useState(false);
+    const pressTimer = useRef(null);
+
+    const panelRef = useRef(null);
+
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (panelRef.current && !panelRef.current.contains(event.target)) {
@@ -41,6 +44,26 @@ export default function BeerCard({ beer }) {
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, []);
+
+    // 🔥 NUEVO: bloquear scroll mientras esta vista está activa
+    useEffect(() => {
+        document.body.classList.add("no-scroll");
+
+        return () => {
+            document.body.classList.remove("no-scroll");
+        };
+    }, []);
+
+    const handlePressStart = () => {
+        pressTimer.current = setTimeout(() => {
+            setShowArt(true);
+        }, 250);
+    };
+
+    const handlePressEnd = () => {
+        clearTimeout(pressTimer.current);
+        setShowArt(false);
+    };
 
     const rawColor = resolveColor(beer.color);
     const beerColor = adjustColorForUI(rawColor);
@@ -87,13 +110,19 @@ export default function BeerCard({ beer }) {
 
     return (
         <div
-            className="beer-card"
+            className={`beer-card ${showArt ? "show-art" : ""}`}
+            onMouseDown={handlePressStart}
+            onMouseUp={handlePressEnd}
+            onMouseLeave={handlePressEnd}
+            onTouchStart={handlePressStart}
+            onTouchEnd={handlePressEnd}
             style={{
                 position: "relative",
-                height: "100%",            // 🔥 ocupa todo el contenedor
+                height: "calc(100vh - 140px)",
                 display: "flex",
                 flexDirection: "column",
-                justifyContent: "space-between", // 🔥 distribuye contenido
+                justifyContent: "space-between",
+                border: `2px solid ${beerColor}`,
                 borderTop: `6px solid ${beerColor}`,
                 boxShadow: `0 0 6px ${beerColor}`
             }}
@@ -132,10 +161,9 @@ export default function BeerCard({ beer }) {
                 )}
             </div>
 
-            {/* 🔥 SELLO */}
             <img
                 onClick={(e) => {
-                    e.stopPropagation(); // 🔥 evita cierre inmediato
+                    e.stopPropagation();
                     setShowBrewery(prev => !prev);
                 }}
                 src={logo}
@@ -152,7 +180,6 @@ export default function BeerCard({ beer }) {
                 }}
             />
 
-            {/* 🔥 PANEL */}
             <div
                 ref={panelRef}
                 style={{
@@ -166,7 +193,6 @@ export default function BeerCard({ beer }) {
                     borderRadius: "8px",
                     fontSize: "12px",
                     zIndex: 20,
-
                     opacity: showBrewery ? 1 : 0,
                     transform: showBrewery
                         ? "translateY(0px)"

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import useTapBeers from "../hooks/useTapBeers";
-import BeerCover from "../components/BeerCover";
+import BeerCoverV2 from "../components/BeerCoverV2";
 
 export default function Museum() {
     const beers = useTapBeers();
@@ -9,11 +9,13 @@ export default function Museum() {
     const [museumData, setMuseumData] = useState([]);
     const [activeItem, setActiveItem] = useState(null);
 
-    const [showUI, setShowUI] = useState(true); // 🔥 NUEVO
+    const [showUI, setShowUI] = useState(true);
 
     const containerRef = useRef(null);
 
-
+    // 🔥 scroll state
+    const [scrollLeft, setScrollLeft] = useState(0);
+    const [containerWidth, setContainerWidth] = useState(0);
 
     const [isLandscape, setIsLandscape] = useState(
         window.innerWidth > window.innerHeight
@@ -35,7 +37,45 @@ export default function Museum() {
             .catch(err => console.error("Museum fetch error:", err));
     }, []);
 
-    // 🔥 NUEVO: detectar scroll para fade UI
+    // 🔥 FIX REAL AQUÍ
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        // 🔥 FORZAR INICIAL (CLAVE)
+        const init = () => {
+            const width = container.offsetWidth;
+            if (width !== 0) {
+                setContainerWidth(width);
+            }
+        };
+
+        init(); // 🔥 primer intento inmediato
+
+        // 🔥 segundo intento (cuando layout ya está listo)
+        requestAnimationFrame(init);
+
+        const handleScroll = () => {
+            setScrollLeft(container.scrollLeft);
+        };
+
+        const handleResize = () => {
+            const width = container.offsetWidth;
+            if (width !== 0) {
+                setContainerWidth(width);
+            }
+        };
+
+        container.addEventListener("scroll", handleScroll, { passive: true });
+        window.addEventListener("resize", handleResize);
+
+        return () => {
+            container.removeEventListener("scroll", handleScroll);
+            window.removeEventListener("resize", handleResize);
+        };
+    }, []);
+
+    // 🔥 fade UI (igual)
     useEffect(() => {
         let timeout;
 
@@ -48,10 +88,7 @@ export default function Museum() {
             }, 450);
         };
 
-        // 🔥 scroll real
         window.addEventListener("scroll", hideUI, { passive: true });
-
-        // 🔥 gesto real (no tap)
         window.addEventListener("touchmove", hideUI, { passive: true });
 
         return () => {
@@ -84,15 +121,15 @@ export default function Museum() {
                     display: "flex",
                     alignItems: "center",
                     overflowX: "auto",
-                    gap: "20px",
+                    gap: isLandscape ? "40px" : "28px",
                     padding: isLandscape ? "0 10px 0 80px" : "0 10px",
-                    scrollSnapType: "x mandatory",
+                    scrollSnapType: "x proximity",
                     scrollBehavior: "smooth",
                     position: "relative",
                 }}
             >
 
-                {/* 🔥 SELECTOR */}
+                {/* SELECTOR */}
                 <div
                     style={{
                         position: "fixed",
@@ -101,19 +138,14 @@ export default function Museum() {
                         transform: isLandscape
                             ? "translateY(-50%) translateZ(0)"
                             : "translateX(-50%) translateZ(0)",
-
                         display: "flex",
                         flexDirection: isLandscape ? "column" : "row",
                         gap: "10px",
-
                         zIndex: 99999,
-
                         backdropFilter: "blur(8px)",
                         background: "rgba(0,0,0,0.4)",
                         padding: "8px",
                         borderRadius: "12px",
-
-                        // 🔥 NUEVO: fade UI
                         opacity: showUI ? 1 : 0,
                         pointerEvents: showUI ? "auto" : "none",
                         transition: "opacity 0.25s ease",
@@ -156,15 +188,17 @@ export default function Museum() {
                     <div
                         style={{
                             minWidth: isLandscape
-                                ? "calc(50vw - 100px)"
-                                : "calc(50vw - 130px)"
+                                ? "calc(50vw - 120px)"
+                                : "calc(50vw - 150px)"
                         }}
                     />
 
                     {data.map((item) => (
-                        <BeerCover
+                        <BeerCoverV2
                             key={item.id}
                             beer={item}
+                            scrollLeft={scrollLeft}
+                            containerWidth={containerWidth}
                             onClick={() => setActiveItem(item)}
                         />
                     ))}
