@@ -1,0 +1,29 @@
+[
+  {
+    "id": "9688b87d-fd0a-4229-af9f-21e04c0d1097",
+    "name": "TIBURON BLONDE ALE",
+    "style": "BLONDE ALE",
+    "abv": "4.8",
+    "year": "2016",
+    "type": "fichas/antiguas",
+    "image_url": "/static/museum/fichas/antiguas/centib-01.jpg"
+  },
+  {
+    "id": "957d0bff-d87e-4267-a3ac-567d11579794",
+    "name": "TIBURON PORTER",
+    "style": "PORTER",
+    "abv": "5.8",
+    "year": "2016",
+    "type": "fichas/antiguas",
+    "image_url": "/static/museum/fichas/antiguas/centib-02-01.jpg"
+  },
+  {
+    "id": "766eee8c-1afd-4f66-804d-fb18ad5d1e66",
+    "name": "",
+    "style": "",
+    "abv": "",
+    "year": "2016",
+    "type": "fichas/antiguas",
+    "image_url": "/static/museum/fichas/antiguas/centib-03-01.jpg"
+  }
+]

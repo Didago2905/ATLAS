@@ -35,6 +35,7 @@ function LoginWrapper() {
 export default function App() {
   return (
     <BrowserRouter>
+
       <Routes>
 
         {/* 🟢 Público */}
@@ -76,6 +77,8 @@ export default function App() {
         </Route>
 
       </Routes>
+
+
     </BrowserRouter>
   );
 }

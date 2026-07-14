@@ -20,11 +20,16 @@ class Beer(Base):
     description = Column(Text, nullable=True)
     origin = Column(String(255), nullable=True)
     image_url = Column(String(500), nullable=True)
+    beercard_background_url = Column(String(500), nullable=True)
 
     prices = Column(JSON, nullable=True)
 
     # 🔥 NUEVO → control del tap
     tap_position = Column(Integer, nullable=True)
+
+    # ⭐ FEATURED SYSTEM
+    is_featured = Column(Boolean, default=False, nullable=False)
+    featured_updated_at = Column(Integer, nullable=True)
 
     # 🔐 Defaults seguros
     is_available = Column(Boolean, default=True, nullable=False)

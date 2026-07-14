@@ -42,3 +42,11 @@ __pycache__/
 .vscode/
 
 .env
+# Local QA, audit, and BrowserStack output/configuration
+app/audit/logs/
+app/data/featured.json
+devtools/
+frontend/browserstack.yml
+frontend/log/
+frontend/tests/results/
+static/**/test.txt

@@ -7,7 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:local": "playwright test",
+    "test:home": "playwright test tests/home.spec.ts",
+    "test:museum": "playwright test tests/museum.spec.ts",
+    "test:beerdetail": "playwright test tests/beerdetail.spec.ts",
+    "test:browserstack": "browserstack-node-sdk playwright test",
+    "test:iphone-home": "browserstack-node-sdk playwright test tests/home.spec.ts",
+    "test:iphone-museum": "browserstack-node-sdk playwright test tests/museum.spec.ts",
+    "test:iphone-beerdetail": "browserstack-node-sdk playwright test tests/beerdetail.spec.ts"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -16,9 +24,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.61.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "browserstack-node-sdk": "^1.63.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",

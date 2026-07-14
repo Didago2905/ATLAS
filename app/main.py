@@ -1,16 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import engine, Base
 import app.models.beer
-from app.api import admin, public
+from app.api import admin, public, audit
+
 
 app = FastAPI(
-    title=settings.app_name,
-    swagger_ui_parameters={"persistAuthorization": True}
+    title=settings.app_name, swagger_ui_parameters={"persistAuthorization": True}
 )
+
+# 🔥 STATIC (AHORA EN EL LUGAR CORRECTO)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 🔥 CORS (VERSIÓN LIMPIA Y ÚNICA)
 origins = [
@@ -25,6 +29,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # 👇 CONFIGURACIÓN OPENAPI PERSONALIZADA
 def custom_openapi():
@@ -62,6 +67,7 @@ Base.metadata.create_all(bind=engine)
 # Registrar routers
 app.include_router(admin.router)
 app.include_router(public.router)
+app.include_router(audit.router)
 
 
 @app.get("/")

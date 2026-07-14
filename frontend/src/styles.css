@@ -4,10 +4,20 @@ body {
     font-family: Arial, sans-serif;
 }
 
+:root {
+    --atlas-vh: 100vh;
+}
+
+@supports (height: 100dvh) {
+    :root {
+        --atlas-vh: 100dvh;
+    }
+}
+
 /* 🔥 NUEVO: bloquear scroll cuando se active */
 .no-scroll {
     overflow: hidden;
-    height: 100vh;
+    height: var(--atlas-vh, 100vh);
 }
 
 .beer-grid {
@@ -46,10 +56,12 @@ body {
 }
 
 /* Estado activo */
+/*
 .beer-card.show-art {
     transform: translateY(-4px);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.7);
 }
+*/
 
 /* Texto */
 .beer-card h2 {
@@ -92,6 +104,8 @@ body {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.7);
+    padding: 16px;
+    box-sizing: border-box;
 
     display: flex;
     align-items: center;
@@ -103,6 +117,10 @@ body {
     padding: 25px;
     border-radius: 10px;
     width: 400px;
+    max-width: 100%;
+    max-height: calc(var(--atlas-vh, 100vh) - 32px);
+    overflow-y: auto;
+    box-sizing: border-box;
 }
 
 .modal input,
@@ -115,4 +133,85 @@ body {
 .modal-buttons {
     display: flex;
     gap: 10px;
+}
+
+/* ⭐ FEATURED MICRO SHAKE */
+
+@keyframes featuredShake {
+
+    0% {
+        transform: rotate(0deg);
+    }
+
+    8% {
+        transform: rotate(1.4deg);
+    }
+
+    16% {
+        transform: rotate(-1.4deg);
+    }
+
+    24% {
+        transform: rotate(1deg);
+    }
+
+    32% {
+        transform: rotate(-1deg);
+    }
+
+    40% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(0deg);
+    }
+}
+
+/* ⭐ FEATURED DROP */
+
+@keyframes featuredDrop {
+
+    0% {
+        opacity: 0;
+        transform: translateY(-42px)
+    }
+
+    45% {
+        opacity: 1;
+        transform: translateY(8px) scale(1.08) rotate(4deg);
+    }
+
+    65% {
+        transform: translateY(-2px) scale(0.96) rotate(-2deg);
+    }
+
+    82% {
+        transform: translateY(1px) scale(1.02) rotate(1deg);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0px) scale(1) rotate(0deg);
+    }
+}
+
+/* ⭐ FEATURED CARD GLOW */
+
+@keyframes featuredCardGlow {
+
+    0% {
+        transform: scale(1);
+        opacity: 0.88;
+    }
+
+    50% {
+        transform: scale(1.06);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 0.88;
+    }
 }

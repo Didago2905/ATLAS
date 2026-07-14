@@ -9,8 +9,10 @@ export function useBeers() {
         try {
             const data = await fetchAdminBeers();
             setBeers(data);
+            return data;
         } catch (error) {
             console.error("ERROR FETCHING BEERS:", error);
+            return [];
         }
     };
 

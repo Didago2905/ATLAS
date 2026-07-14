@@ -12,6 +12,7 @@ class BeerCreate(BaseModel):
     description: Optional[str] = None
     origin: Optional[str] = None
     image_url: Optional[str] = None
+    beercard_background_url: Optional[str] = None
     prices: Optional[Dict[str, float]] = None
     tap_position: Optional[int] = None  # 🔥 NUEVO
 
@@ -30,11 +31,16 @@ class BeerResponse(BaseModel):
     description: Optional[str]
     origin: Optional[str]
     image_url: Optional[str]
+    beercard_background_url: Optional[str] = None
 
     prices: Optional[Dict[str, float]] = None
 
     is_available: bool
+    is_featured: Optional[bool] = False
+
     tap_position: Optional[int]  # 🔥 NUEVO
+
+    featured_updated_at: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -57,8 +63,13 @@ class BeerUpdate(BaseModel):
     description: Optional[str] = None
     origin: Optional[str] = None
     image_url: Optional[str] = None
+    beercard_background_url: Optional[str] = None
 
     prices: Optional[Dict[str, float]] = None
 
     is_available: Optional[bool] = None
+    is_featured: Optional[bool] = None
+
     tap_position: Optional[int] = None  # 🔥 NUEVO
+
+    featured_updated_at: Optional[int] = None

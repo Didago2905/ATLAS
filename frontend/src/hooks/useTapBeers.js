@@ -14,17 +14,23 @@ export default function useTapBeers() {
 
             const data = await res.json();
 
-            console.log("TAP DATA:", data); // debug ligero
+            console.log("TAP DATA:", data);
 
             if (Array.isArray(data)) {
                 setBeers(prev => {
-                    const same = JSON.stringify(prev) === JSON.stringify(data);
+                    const same =
+                        JSON.stringify(prev) ===
+                        JSON.stringify(data);
+
                     return same ? prev : data;
                 });
             }
 
         } catch (error) {
-            console.error("FETCH TAP ERROR:", error);
+            console.error(
+                "FETCH TAP ERROR:",
+                error
+            );
         }
     };
 

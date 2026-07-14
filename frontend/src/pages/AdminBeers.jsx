@@ -38,6 +38,19 @@ export default function AdminBeers() {
         setIsCreating(false);
     };
 
+    const handleAssetsUpdated = async () => {
+        const list = await fetchAdminBeers();
+
+        if (!Array.isArray(list)) return;
+
+        if (selectedBeer?.id) {
+            const updated = list.find((b) => b.id === selectedBeer.id);
+            if (updated) {
+                setSelectedBeer({ ...updated });
+            }
+        }
+    };
+
     const handleSave = async (data) => {
         try {
 
@@ -50,9 +63,16 @@ export default function AdminBeers() {
                 ibu: data.ibu || 0,
                 description: data.description || "",
                 origin: data.origin || "México",
+
                 image_url: data.image_url || "",
+
+                beercard_background_url:
+                    data.beercard_background_url || "",
+
                 prices: data.prices || {},
-                is_available: data.is_available ?? true
+
+                is_available:
+                    data.is_available ?? true
             };
 
             if (isCreating) {
@@ -113,6 +133,7 @@ export default function AdminBeers() {
                 onSave={handleSave}
                 beer={selectedBeer}
                 isCreating={isCreating}
+                onAssetsUpdated={handleAssetsUpdated}
             />
 
         </div>

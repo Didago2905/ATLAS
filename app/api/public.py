@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional, List
+import json
+import os
 
 from app.core.database import get_db
 from app.models.beer import Beer
@@ -66,3 +68,18 @@ def get_beers(
 @router.get("/tap", response_model=List[BeerResponse])
 def get_tap(db: Session = Depends(get_db)):
     return get_tap_beers(db)
+
+
+# 🔥 NUEVO ENDPOINT MUSEO
+@router.get("/museum")
+def get_museum():
+
+    json_path = "data/museum.json"
+
+    if not os.path.exists(json_path):
+        return []
+
+    with open(json_path, "r") as f:
+        data = json.load(f)
+
+    return data

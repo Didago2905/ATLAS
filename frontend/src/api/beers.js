@@ -60,6 +60,34 @@ export async function createBeer(data) {
     return res.json();
 }
 
+export async function uploadBeerCardBackground(beerId, file) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const token = localStorage.getItem("token");
+
+    const res = await fetch(
+        `${API_URL}/admin/beers/${beerId}/upload-card-background`,
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+        }
+    );
+
+    if (res.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+        return;
+    }
+
+    if (!res.ok) throw new Error("Error uploading BeerCard background");
+
+    return res.json();
+}
+
 export async function updateBeer(id, data) {
     const res = await fetch(`${API_URL}/admin/beers/${id}`, {
         method: "PUT",

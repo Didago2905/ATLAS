@@ -1,4 +1,3 @@
-
 import { colorLabelMap } from "../utils/colorUtils";
 import { updateBeer } from "../api/beers";
 import { useState, useEffect } from "react";
@@ -21,6 +20,21 @@ export default function AdminBeerTable({ beers, token, refresh, onEdit }) {
             await refresh();
         } catch (error) {
             console.error("TOGGLE ERROR:", error);
+        }
+    };
+
+    // ⭐ NUEVO → Featured toggle
+    const handleFeaturedToggle = async (beer) => {
+        try {
+            await updateBeer(beer.id, {
+                ...beer,
+                is_featured: !beer.is_featured,
+                featured_updated_at: Math.floor(Date.now() / 1000)
+            });
+
+            await refresh();
+        } catch (error) {
+            console.error("FEATURED TOGGLE ERROR:", error);
         }
     };
 
@@ -157,6 +171,20 @@ export default function AdminBeerTable({ beers, token, refresh, onEdit }) {
                         </label>
                     </div>
 
+                    {/* ⭐ FEATURED */}
+                    <div style={{ marginTop: "8px" }}>
+                        <span
+                            onClick={() => handleFeaturedToggle(beer)}
+                            style={{
+                                cursor: "pointer",
+                                fontSize: "22px",
+                                opacity: beer.is_featured ? 1 : 0.35
+                            }}
+                        >
+                            ⭐
+                        </span>
+                    </div>
+
                     {/* edit */}
                     <button
                         onClick={() => onEdit(beer)}
@@ -186,6 +214,7 @@ export default function AdminBeerTable({ beers, token, refresh, onEdit }) {
                         <th>Prices</th>
                         <th>Image</th>
                         <th>On Tap</th>
+                        <th>Featured</th>
                         <th>Edit</th>
                     </tr>
                 </thead>
@@ -259,6 +288,20 @@ export default function AdminBeerTable({ beers, token, refresh, onEdit }) {
                                     checked={beer.is_available}
                                     onChange={() => handleToggle(beer)}
                                 />
+                            </td>
+
+                            {/* ⭐ FEATURED */}
+                            <td>
+                                <span
+                                    onClick={() => handleFeaturedToggle(beer)}
+                                    style={{
+                                        cursor: "pointer",
+                                        fontSize: "20px",
+                                        opacity: beer.is_featured ? 1 : 0.35
+                                    }}
+                                >
+                                    ⭐
+                                </span>
                             </td>
 
                             <td>
