@@ -1,13 +1,29 @@
 import { useState, useEffect, useRef } from "react";
 import useCatalogSession from "../catalog/useCatalogSession";
 import BeerCoverV2 from "../components/BeerCoverV2";
+import { createArchive } from "../museum/archive";
+import { createExhibition } from "../museum/exhibition";
+import { hideControls, showControls } from "../museum/animation";
+import { clearSelection, selectArtwork } from "../museum/selection";
+import {
+    MUSEUM_MODES,
+    selectMuseumMode,
+} from "../museum/navigation";
+import {
+    measureStageWidth,
+    readOrientation,
+    observeWindowResize,
+    observeStageScroll,
+} from "../museum/runtime";
 
 export default function Museum() {
     console.log("[MUSEUM_QA] Museum component mounted");
     const { beers } = useCatalogSession();
     const museumProbe = window.__ATLAS_MUSEUM_PROBE__ === true;
 
-    const [mode, setMode] = useState("fichas");
+    const [mode, setMode] = useState(
+        MUSEUM_MODES.FICHAS
+    );
     const [museumData, setMuseumData] = useState([]);
     const [activeItem, setActiveItem] = useState(null);
     const [probeSnapshot, setProbeSnapshot] = useState(null);
@@ -21,7 +37,7 @@ export default function Museum() {
     const [containerWidth, setContainerWidth] = useState(0);
 
     const [isLandscape, setIsLandscape] = useState(
-        window.innerWidth > window.innerHeight
+        readOrientation()
     );
 
     const toRect = (node) => {
@@ -62,7 +78,7 @@ export default function Museum() {
 
         // 🔥 FORZAR INICIAL (CLAVE)
         const init = () => {
-            const width = container.offsetWidth;
+            const width = measureStageWidth(container);
             if (width !== 0) {
                 setContainerWidth(width);
             }
@@ -85,7 +101,7 @@ export default function Museum() {
         };
 
         const handleResize = () => {
-            const width = container.offsetWidth;
+            const width = measureStageWidth(container);
             if (width !== 0) {
                 setContainerWidth(width);
             }
@@ -93,12 +109,14 @@ export default function Museum() {
 
         console.log("[MUSEUM_QA] Scroll listener attached");
 
-        container.addEventListener("scroll", handleScroll, { passive: true });
-        window.addEventListener("resize", handleResize);
+        const stopObservingScroll =
+            observeStageScroll(container, handleScroll);
+        const stopObservingResize =
+            observeWindowResize(handleResize);
 
         return () => {
-            container.removeEventListener("scroll", handleScroll);
-            window.removeEventListener("resize", handleResize);
+            stopObservingScroll();
+            stopObservingResize();
         };
 
     }, []);
@@ -187,11 +205,15 @@ export default function Museum() {
 
     useEffect(() => {
         const handleResize = () => {
-            setIsLandscape(window.innerWidth > window.innerHeight);
+            setIsLandscape(readOrientation());
         };
 
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
+        const stopObservingResize =
+            observeWindowResize(handleResize);
+
+        return () => {
+            stopObservingResize();
+        };
     }, []);
 
     useEffect(() => {
@@ -239,70 +261,16 @@ export default function Museum() {
             .catch(err => console.error("Museum fetch error:", err));
     }, []);
 
-    // 🔥 FIX REAL AQUÍ
-    useEffect(() => {
-
-        console.log("[MUSEUM_QA] useEffect entered");
-
-        const container = containerRef.current;
-
-        if (!container) {
-            console.log("[MUSEUM_QA] containerRef is NULL");
-            return;
-        }
-
-        console.log("[MUSEUM_QA] containerRef OK");
-
-        // 🔥 FORZAR INICIAL (CLAVE)
-        const init = () => {
-            const width = container.offsetWidth;
-            if (width !== 0) {
-                setContainerWidth(width);
-            }
-        };
-
-        init(); // 🔥 primer intento inmediato
-
-        // 🔥 segundo intento (cuando layout ya está listo)
-        requestAnimationFrame(init);
-
-        const handleScroll = () => {
-            setScrollLeft(container.scrollLeft);
-            console.log("[MUSEUM_QA][SCROLL]", {
-                scrollLeft: container.scrollLeft,
-                scrollWidth: container.scrollWidth,
-                clientWidth: container.clientWidth,
-            });
-            logMuseumProbe("museum-scroll");
-        };
-
-        const handleResize = () => {
-            const width = container.offsetWidth;
-            if (width !== 0) {
-                setContainerWidth(width);
-            }
-        };
-
-
-        container.addEventListener("scroll", handleScroll, { passive: true });
-        window.addEventListener("resize", handleResize);
-
-        return () => {
-            container.removeEventListener("scroll", handleScroll);
-            window.removeEventListener("resize", handleResize);
-        };
-    }, []);
-
     // 🔥 fade UI (igual)
     useEffect(() => {
         let timeout;
 
         const hideUI = () => {
-            setShowUI(false);
+            hideControls(setShowUI);
 
             clearTimeout(timeout);
             timeout = setTimeout(() => {
-                setShowUI(true);
+                showControls(setShowUI);
             }, 450);
         };
 
@@ -315,13 +283,19 @@ export default function Museum() {
         };
     }, []);
 
+    const artworks = createArchive(museumData);
+
+    const exhibitionArtworks = createExhibition(artworks);
+
     let data = [];
 
-    if (mode === "fichas") {
-        data = museumData.filter(item => item.type === "fichas/antiguas");
+    if (mode === MUSEUM_MODES.FICHAS) {
+        data = exhibitionArtworks.filter(
+            item => item.type === "fichas/antiguas"
+        );
     }
 
-    if (mode === "tap") {
+    if (mode === MUSEUM_MODES.TAP) {
         data = beers;
     }
 
@@ -505,13 +479,19 @@ export default function Museum() {
                     }}
                 >
                     <button
-                        onClick={() => setMode("fichas")}
+                        onClick={() =>
+                            setMode(
+                                selectMuseumMode(
+                                    MUSEUM_MODES.FICHAS
+                                )
+                            )
+                        }
                         style={{
                             padding: "10px",
                             borderRadius: "50%",
                             border: "1px solid #333",
-                            background: mode === "fichas" ? "#fff" : "#111",
-                            color: mode === "fichas" ? "#000" : "#fff",
+                            background: mode === MUSEUM_MODES.FICHAS ? "#fff" : "#111",
+                            color: mode === MUSEUM_MODES.FICHAS ? "#000" : "#fff",
                             cursor: "pointer",
                             width: "44px",
                             height: "44px",
@@ -521,13 +501,19 @@ export default function Museum() {
                     </button>
 
                     <button
-                        onClick={() => setMode("tap")}
+                        onClick={() =>
+                            setMode(
+                                selectMuseumMode(
+                                    MUSEUM_MODES.TAP
+                                )
+                            )
+                        }
                         style={{
                             padding: "10px",
                             borderRadius: "50%",
                             border: "1px solid #333",
-                            background: mode === "tap" ? "#fff" : "#111",
-                            color: mode === "tap" ? "#000" : "#fff",
+                            background: mode === MUSEUM_MODES.TAP ? "#fff" : "#111",
+                            color: mode === MUSEUM_MODES.TAP ? "#000" : "#fff",
                             cursor: "pointer",
                             width: "44px",
                             height: "44px",
@@ -550,7 +536,7 @@ export default function Museum() {
                             beer={item}
                             scrollLeft={scrollLeft}
                             containerWidth={containerWidth}
-                            onClick={() => setActiveItem(item)}
+                            onClick={() => setActiveItem(selectArtwork(item))}
                         />
                     ))}
 
@@ -564,7 +550,7 @@ export default function Museum() {
 
             {activeItem && (
                 <div
-                    onClick={() => setActiveItem(null)}
+                    onClick={() => setActiveItem(clearSelection())}
                     style={{
                         position: "fixed",
                         top: 0,
