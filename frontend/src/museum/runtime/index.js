@@ -33,3 +33,9 @@ export function observeStageScroll(stage, callback) {
         stage.removeEventListener("scroll", callback);
     };
 }
+export function scrollStageTo(stage, left) {
+    stage.scrollTo({
+        left,
+        behavior: "smooth",
+    });
+}

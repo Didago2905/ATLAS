@@ -41,3 +41,15 @@ export const MUSEUM_MODES = {
 export function selectMuseumMode(mode) {
     return mode;
 }
+/**
+ * Interprets artwork interaction from measured geometry.
+ */
+export function resolveArtworkNavigation(elementCenter, centerX) {
+    const distance = elementCenter - centerX;
+
+    if (Math.abs(distance) > 10) {
+        return "center";
+    }
+
+    return "activate";
+}

@@ -1,4 +1,7 @@
 import { useRef, useEffect } from "react";
+import { createAnimation } from "../museum/animation";
+import { resolveArtworkNavigation } from "../museum/navigation";
+import { scrollStageTo } from "../museum/runtime";
 
 export default function BeerCoverV2({ beer, onClick }) {
 
@@ -10,9 +13,7 @@ export default function BeerCoverV2({ beer, onClick }) {
     useEffect(() => {
         let frame;
 
-        let lastRotate = 0;
-        let lastScale = 0;
-        let lastZ = 0;
+        const animation = createAnimation();
 
         const update = () => {
             if (!ref.current) return;
@@ -23,77 +24,13 @@ export default function BeerCoverV2({ beer, onClick }) {
                     window.innerWidth) / 2;
             const elementCenter = rect.left + rect.width / 2;
 
-            const distance = elementCenter - center;
-            const normalized = distance / center;
-
-            const intensity = Math.min(Math.abs(normalized), 1);
-
-            // 🔥 ROTACIÓN LIMPIA
-            let rotate = Math.round(normalized * 40);
-
-            if (Math.abs(normalized) < 0.03) {
-                rotate = 0;
-            } else {
-                rotate = Math.round(rotate / 2) * 2;
-            }
-
-            // 🔥 ESCALA
-            let scale = 1 - intensity * 0.24;
-            scale = Math.round(scale * 1000) / 1000;
-
-            // 🔥 PROFUNDIDAD
-            const translateZ =
-                Math.round((-intensity * 60) / 10) * 10;
-
-            const opacity = 1 - Math.min(intensity * 0.5, 0.5);
-
-            // 🔥 BLUR ESTABLE
-            let blur = 0;
-            if (intensity > 0.6) blur = 1;
-            else if (intensity > 0.35) blur = 0.5;
-
-            // 🔥 HIGHLIGHT (nuevo)
-            const highlightStrength = 1 - intensity;
-            const highlightOpacity =
-                Math.round((highlightStrength * 0.20) * 100) / 100;
-
-            let shading = 0;
-
-            if (normalized > 0.35) shading = 0.20;
-            else if (normalized > 0.1) shading = 0.10;
-            else if (normalized < -0.35) shading = -0.20;
-            else if (normalized < -0.1) shading = -0.10;
-
-            // 🔥 ANTI-JITTER
-            const changed =
-                Math.abs(rotate - lastRotate) > 0.5 ||
-                Math.abs(scale - lastScale) > 0.002 ||
-                Math.abs(translateZ - lastZ) > 1;
-
-            if (changed) {
-                ref.current.style.transform = `
-                    perspective(900px)
-                    translateZ(${translateZ}px)
-                    rotateY(${rotate}deg)
-                    scale(${scale})
-                `;
-
-                lastRotate = rotate;
-                lastScale = scale;
-                lastZ = translateZ;
-            }
-
-            ref.current.style.opacity = opacity;
-
-            // 🔥 blur directo
-            if (imgRef.current) {
-                imgRef.current.style.filter = `blur(${blur}px)`;
-            }
-
-            // 🔥 highlight directo
-            if (highlightRef.current) {
-                highlightRef.current.style.opacity = highlightOpacity;
-            }
+            animation.update({
+                cardCenterX: elementCenter,
+                viewportCenterX: center,
+                card: ref.current,
+                image: imgRef.current,
+                highlight: highlightRef.current,
+            });
 
             frame = requestAnimationFrame(update);
         };
@@ -121,18 +58,18 @@ export default function BeerCoverV2({ beer, onClick }) {
                     container.scrollLeft +
                     container.offsetWidth / 2;
 
-                const distance = elementCenter - centerX;
+                const navigation = resolveArtworkNavigation(
+                    elementCenter,
+                    centerX
+                );
 
-                if (Math.abs(distance) > 10) {
+                if (navigation === "center") {
                     const scrollTo =
                         ref.current.offsetLeft -
                         container.offsetWidth / 2 +
                         ref.current.offsetWidth / 2;
 
-                    container.scrollTo({
-                        left: scrollTo,
-                        behavior: "smooth",
-                    });
+                    scrollStageTo(container, scrollTo);
 
                     return;
                 }
