@@ -5,45 +5,47 @@
  * Version: 2.0
  *
  * Purpose
- * Describe the visible presentation space.
+ * Describe normalized presentation-space measurements.
  *
  * Owns
- * Visible area, orientation, safe areas, presentation mode, container width, and resize observation.
+ * Orientation, viewport dimensions, visible presentation
+ * dimensions, and normalized stage dimensions.
  *
  * Never Owns
- * Selection, navigation, scene, animation, or renderer concerns.
- *
- * QA Observes
- * Presentation-space accuracy across orientation and safe-area changes.
+ * Browser APIs, DOM references, event listeners, React state,
+ * rendering, animation, navigation, selection, or Museum
+ * presentation policy.
  *
  * Dependencies
- * Platform display characteristics and container elements are provided by the host environment.
- *
- * Notes
- * Viewport describes presentation constraints without calculating a scene.
+ * Runtime supplies raw browser and stage measurements.
  * ==========================================================
  */
 
 export const ENGINE_NAME = "Viewport";
+
 /**
- * Reads the current presentation-space measurements.
+ * Normalizes raw viewport measurements.
  */
-export function getViewport(container) {
+export function getViewport({
+    width,
+    height,
+    visibleWidth = width,
+    visibleHeight = height,
+}) {
     return {
-        isLandscape: window.innerWidth > window.innerHeight,
-        visibleWidth: window.visualViewport?.width || window.innerWidth,
-        visibleHeight: window.visualViewport?.height || window.innerHeight,
-        containerWidth: container?.offsetWidth || 0,
+        isLandscape: width > height,
+        width,
+        height,
+        visibleWidth,
+        visibleHeight,
     };
 }
 
 /**
- * Observes platform resize events for viewport consumers.
+ * Normalizes raw stage measurements.
  */
-export function observeViewport(onResize) {
-    window.addEventListener("resize", onResize);
-
-    return () => {
-        window.removeEventListener("resize", onResize);
+export function getStageDimensions(width) {
+    return {
+        width,
     };
 }

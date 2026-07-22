@@ -2,8 +2,11 @@ export function measureStageWidth(stage) {
     return stage?.offsetWidth ?? 0;
 }
 
-export function readOrientation() {
-    return window.innerWidth > window.innerHeight;
+export function readViewportDimensions() {
+    return {
+        width: window.innerWidth,
+        height: window.innerHeight,
+    };
 }
 
 export function scheduleNextFrame(callback) {

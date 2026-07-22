@@ -5,36 +5,91 @@
  * Version: 2.0
  *
  * Purpose
- * Maintain exactly one active artwork.
+ * ----------------------------------------------------------
+ * Maintain the semantic selection state of the Museum.
+ *
+ * Selection guarantees that at most one artwork is selected
+ * at any time.
  *
  * Owns
- * The active artwork and its selection context.
+ * ----------------------------------------------------------
+ * The currently selected artwork.
+ *
+ * Selection represents confirmed user intent.
  *
  * Never Owns
- * Geometry, DOM, scroll, animation, or renderer concerns.
+ * ----------------------------------------------------------
+ * Focus state.
+ * Geometry.
+ * DOM nodes.
+ * Rendering.
+ * Animation.
+ * Browser APIs.
+ * Scroll position.
+ * Viewport state.
  *
  * QA Observes
- * The single-active-artwork invariant and selection context.
+ * ----------------------------------------------------------
+ * Exactly zero or one artwork may be selected.
+ *
+ * Selection never owns focus.
+ *
+ * Selection never performs rendering.
+ *
+ * Selection never mutates presentation state.
  *
  * Dependencies
+ * ----------------------------------------------------------
  * Artwork identity is supplied by the collection domain.
  *
+ * Activation requests are supplied by Navigation.
+ *
+ * Presentation consumes the selected artwork.
+ *
+ * Museum coordinates Selection with the remaining engines.
+ *
  * Notes
- * Selection is application state, not a visual implementation detail.
+ * ----------------------------------------------------------
+ * Focus and Selection are different concepts.
+ *
+ * Navigation determines where the user's attention is.
+ *
+ * Selection represents an explicit activation performed by
+ * the user.
+ *
+ * Selection is application state, not a visual
+ * implementation detail.
  * ==========================================================
  */
 
 export const ENGINE_NAME = "Selection";
-/**
- * Selects the active artwork.
- */
-export function selectArtwork(artwork) {
-    return artwork;
-}
 
 /**
- * Clears the active artwork.
+ * Creates a Selection engine instance.
  */
-export function clearSelection() {
-    return null;
+export function createSelection() {
+    let activeArtwork = null;
+
+    /**
+     * Selects an artwork.
+     *
+     * Stores the current application-level selection.
+     */
+    function selectArtwork(artwork) {
+        activeArtwork = artwork;
+        return activeArtwork;
+    }
+
+    /**
+     * Clears the current artwork selection.
+     */
+    function clearSelection() {
+        activeArtwork = null;
+        return activeArtwork;
+    }
+
+    return {
+        selectArtwork,
+        clearSelection,
+    };
 }

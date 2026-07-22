@@ -4,17 +4,21 @@ import BeerCoverV2 from "../components/BeerCoverV2";
 import { createArchive } from "../museum/archive";
 import { createExhibition } from "../museum/exhibition";
 import { hideControls, showControls } from "../museum/animation";
-import { clearSelection, selectArtwork } from "../museum/selection";
+import { createSelection } from "../museum/selection";
 import {
     MUSEUM_MODES,
     selectMuseumMode,
 } from "../museum/navigation";
 import {
     measureStageWidth,
-    readOrientation,
+    readViewportDimensions,
     observeWindowResize,
     observeStageScroll,
 } from "../museum/runtime";
+import {
+    getStageDimensions,
+    getViewport,
+} from "../museum/viewport";
 
 export default function Museum() {
     console.log("[MUSEUM_QA] Museum component mounted");
@@ -28,6 +32,12 @@ export default function Museum() {
     const [activeItem, setActiveItem] = useState(null);
     const [probeSnapshot, setProbeSnapshot] = useState(null);
 
+    const selectionRef = useRef(null);
+
+    if (!selectionRef.current) {
+        selectionRef.current = createSelection();
+    }
+
     const [showUI, setShowUI] = useState(true);
 
     const containerRef = useRef(null);
@@ -37,7 +47,7 @@ export default function Museum() {
     const [containerWidth, setContainerWidth] = useState(0);
 
     const [isLandscape, setIsLandscape] = useState(
-        readOrientation()
+        getViewport(readViewportDimensions()).isLandscape
     );
 
     const toRect = (node) => {
@@ -78,7 +88,7 @@ export default function Museum() {
 
         // 🔥 FORZAR INICIAL (CLAVE)
         const init = () => {
-            const width = measureStageWidth(container);
+            const width = getStageDimensions(measureStageWidth(container)).width;
             if (width !== 0) {
                 setContainerWidth(width);
             }
@@ -101,7 +111,7 @@ export default function Museum() {
         };
 
         const handleResize = () => {
-            const width = measureStageWidth(container);
+            const width = getStageDimensions(measureStageWidth(container)).width;
             if (width !== 0) {
                 setContainerWidth(width);
             }
@@ -205,7 +215,7 @@ export default function Museum() {
 
     useEffect(() => {
         const handleResize = () => {
-            setIsLandscape(readOrientation());
+            setIsLandscape(getViewport(readViewportDimensions()).isLandscape);
         };
 
         const stopObservingResize =
@@ -536,7 +546,7 @@ export default function Museum() {
                             beer={item}
                             scrollLeft={scrollLeft}
                             containerWidth={containerWidth}
-                            onClick={() => setActiveItem(selectArtwork(item))}
+                            onClick={() => setActiveItem(selectionRef.current.selectArtwork(item))}
                         />
                     ))}
 
@@ -550,7 +560,7 @@ export default function Museum() {
 
             {activeItem && (
                 <div
-                    onClick={() => setActiveItem(clearSelection())}
+                    onClick={() => setActiveItem(selectionRef.current.clearSelection())}
                     style={{
                         position: "fixed",
                         top: 0,
