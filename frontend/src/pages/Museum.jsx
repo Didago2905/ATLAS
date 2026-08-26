@@ -21,9 +21,16 @@ import {
 } from "../museum/viewport";
 
 export default function Museum() {
-    console.log("[MUSEUM_QA] Museum component mounted");
     const { beers } = useCatalogSession();
     const museumProbe = window.__ATLAS_MUSEUM_PROBE__ === true;
+
+    const logMuseumQa = (...args) => {
+        if (museumProbe) {
+            console.log("[MUSEUM_QA]", ...args);
+        }
+    };
+
+    logMuseumQa("Museum component mounted");
 
     const [mode, setMode] = useState(
         MUSEUM_MODES.FICHAS
@@ -65,14 +72,43 @@ export default function Museum() {
         };
     };
 
+    const getNearestCardNode = () => {
+        const container = containerRef.current;
+
+        if (!container) return null;
+
+        const centerX =
+            container.getBoundingClientRect().left +
+            container.clientWidth / 2;
+
+        const track = container.querySelector("[data-atlas-museum-track]");
+        const cards = Array.from(track?.children || []).filter(
+            node => node.querySelector("img")
+        );
+
+        return cards.reduce((nearest, card) => {
+            if (!nearest) return card;
+
+            const cardCenter = (node) => {
+                const rect = node.getBoundingClientRect();
+                return rect.left + rect.width / 2;
+            };
+
+            return Math.abs(cardCenter(card) - centerX) <
+                Math.abs(cardCenter(nearest) - centerX)
+                ? card
+                : nearest;
+        }, null);
+    };
+
     // 🔥 FIX REAL AQUÍ
     useEffect(() => {
 
-        console.log("[MUSEUM_QA] useEffect entered");
+        logMuseumQa("useEffect entered");
 
         requestAnimationFrame(() => {
-            console.log(
-                "[MUSEUM_QA] containerRef after RAF",
+            logMuseumQa(
+                "containerRef after RAF",
                 containerRef.current
             );
         });
@@ -80,11 +116,11 @@ export default function Museum() {
         const container = containerRef.current;
 
         if (!container) {
-            console.log("[MUSEUM_QA] containerRef is NULL");
+            logMuseumQa("containerRef is NULL");
             return;
         }
 
-        console.log("[MUSEUM_QA] containerRef OK");
+        logMuseumQa("containerRef OK");
 
         // 🔥 FORZAR INICIAL (CLAVE)
         const init = () => {
@@ -101,11 +137,13 @@ export default function Museum() {
         const handleScroll = () => {
             setScrollLeft(container.scrollLeft);
 
-            console.log("[MUSEUM_QA][SCROLL]", {
-                scrollLeft: container.scrollLeft,
-                scrollWidth: container.scrollWidth,
-                clientWidth: container.clientWidth,
-            });
+            if (museumProbe) {
+                console.log("[MUSEUM_QA][SCROLL]", {
+                    scrollLeft: container.scrollLeft,
+                    scrollWidth: container.scrollWidth,
+                    clientWidth: container.clientWidth,
+                });
+            }
 
             logMuseumProbe("museum-scroll");
         };
@@ -117,7 +155,7 @@ export default function Museum() {
             }
         };
 
-        console.log("[MUSEUM_QA] Scroll listener attached");
+        logMuseumQa("Scroll listener attached");
 
         const stopObservingScroll =
             observeStageScroll(container, handleScroll);
@@ -133,7 +171,7 @@ export default function Museum() {
 
     const readMuseumProbeSnapshot = (phase) => {
         const container = containerRef.current;
-        const activeCard = getActiveCardNode();
+        const activeCard = getNearestCardNode();
         const activeRect = activeCard?.getBoundingClientRect();
         const visibleHeight = window.visualViewport?.height || window.innerHeight;
         const stageRect = container?.getBoundingClientRect();
@@ -452,14 +490,11 @@ export default function Museum() {
 
             <div
                 ref={containerRef}
+                data-atlas-museum-stage
                 style={{
                     height: "100dvh",
                     background: "#000",
-                    display: "flex",
-                    alignItems: "center",
                     overflowX: "auto",
-                    gap: isLandscape ? "40px" : "28px",
-                    padding: isLandscape ? "0 10px 0 80px" : "0 10px",
                     scrollSnapType: "x proximity",
                     scrollBehavior: "smooth",
                     position: "relative",
@@ -468,6 +503,7 @@ export default function Museum() {
 
                 {/* SELECTOR */}
                 <div
+                    data-atlas-museum-selector
                     style={{
                         position: "fixed",
                         top: isLandscape ? "50%" : "20px",
@@ -533,10 +569,22 @@ export default function Museum() {
                     </button>
                 </div>
 
-                <>
+                <div
+                    data-atlas-museum-track
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        width: "max-content",
+                        minWidth: "100%",
+                        height: "100%",
+                        gap: isLandscape ? "40px" : "28px",
+                        padding: isLandscape ? "0 10px 0 80px" : "0 10px",
+                    }}
+                >
                     <div
                         style={{
                             minWidth: edgeSpacer,
+                            flex: `0 0 ${edgeSpacer}`,
                         }}
                     />
 
@@ -544,6 +592,7 @@ export default function Museum() {
                         <BeerCoverV2
                             key={item.id}
                             beer={item}
+                            stageRef={containerRef}
                             scrollLeft={scrollLeft}
                             containerWidth={containerWidth}
                             onClick={() => setActiveItem(selectionRef.current.selectArtwork(item))}
@@ -553,9 +602,10 @@ export default function Museum() {
                     <div
                         style={{
                             minWidth: edgeSpacer,
+                            flex: `0 0 ${edgeSpacer}`,
                         }}
                     />
-                </>
+                </div>
             </div>
 
             {activeItem && (

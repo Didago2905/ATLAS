@@ -3,9 +3,10 @@ import { createAnimation } from "../museum/animation";
 import { resolveArtworkNavigation } from "../museum/navigation";
 import { scrollStageTo } from "../museum/runtime";
 
-export default function BeerCoverV2({ beer, onClick }) {
+export default function BeerCoverV2({ beer, onClick, stageRef }) {
 
-    const ref = useRef(null);
+    const layoutRef = useRef(null);
+    const visualRef = useRef(null);
 
     const imgRef = useRef(null);
     const highlightRef = useRef(null);
@@ -16,9 +17,9 @@ export default function BeerCoverV2({ beer, onClick }) {
         const animation = createAnimation();
 
         const update = () => {
-            if (!ref.current) return;
+            if (!visualRef.current) return;
 
-            const rect = ref.current.getBoundingClientRect();
+            const rect = visualRef.current.getBoundingClientRect();
             const center =
                 (window.visualViewport?.width ??
                     window.innerWidth) / 2;
@@ -27,7 +28,7 @@ export default function BeerCoverV2({ beer, onClick }) {
             animation.update({
                 cardCenterX: elementCenter,
                 viewportCenterX: center,
-                card: ref.current,
+                card: visualRef.current,
                 image: imgRef.current,
                 highlight: highlightRef.current,
             });
@@ -42,17 +43,17 @@ export default function BeerCoverV2({ beer, onClick }) {
 
     return (
         <div
-            ref={ref}
+            ref={layoutRef}
             onClick={(e) => {
                 e.stopPropagation();
 
-                if (!ref.current) return;
+                if (!layoutRef.current || !stageRef?.current) return;
 
-                const container = ref.current.parentElement;
+                const container = stageRef.current;
 
                 const elementCenter =
-                    ref.current.offsetLeft +
-                    ref.current.offsetWidth / 2;
+                    layoutRef.current.offsetLeft +
+                    layoutRef.current.offsetWidth / 2;
 
                 const centerX =
                     container.scrollLeft +
@@ -65,9 +66,9 @@ export default function BeerCoverV2({ beer, onClick }) {
 
                 if (navigation === "center") {
                     const scrollTo =
-                        ref.current.offsetLeft -
+                        layoutRef.current.offsetLeft -
                         container.offsetWidth / 2 +
-                        ref.current.offsetWidth / 2;
+                        layoutRef.current.offsetWidth / 2;
 
                     scrollStageTo(container, scrollTo);
 
@@ -83,20 +84,10 @@ export default function BeerCoverV2({ beer, onClick }) {
                 margin: "0 12px",
 
                 scrollSnapAlign: "center",
-
-                transformOrigin: "center center",
-                backfaceVisibility: "hidden",
-                willChange: "transform",
-
-                borderRadius: "14px",
-                overflow: "hidden",
-
-                boxShadow: "0 12px 28px rgba(0,0,0,0.55)",
-
-                transition: "opacity 0.2s ease",
             }}
         >
             <div
+                ref={visualRef}
                 style={{
                     width: "100%",
                     height: "100%",
@@ -106,7 +97,11 @@ export default function BeerCoverV2({ beer, onClick }) {
                     position: "relative",
 
                     transform: "translateZ(0)",
-                    willChange: "auto",
+                    transformOrigin: "center center",
+                    backfaceVisibility: "hidden",
+                    willChange: "transform",
+                    boxShadow: "0 12px 28px rgba(0,0,0,0.55)",
+                    transition: "opacity 0.2s ease",
                 }}
             >
                 {beer?.image_url && (
