@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import useCatalogSession from "../catalog/useCatalogSession";
 import { useNavigate } from "react-router-dom";
 import { audit } from "../utils/audit";
@@ -8,6 +8,8 @@ export default function TapGrid({ sort }) {
 
     const navigate = useNavigate();
     const [exiting, setExiting] = useState(false);
+    const multitouchGuardRef = useRef(false);
+    const multitouchGuardTimerRef = useRef(null);
 
     const [mobileGridMode, setMobileGridMode] = useState(() => {
         return localStorage.getItem("tap_grid_mode") || "focus";
@@ -75,7 +77,26 @@ export default function TapGrid({ sort }) {
 
         let lastTouchTime = 0;
 
+        const clearMultitouchGuard = () => {
+            multitouchGuardRef.current = false;
+            multitouchGuardTimerRef.current = null;
+        };
+
+        const armGuardCleanup = () => {
+            window.clearTimeout(multitouchGuardTimerRef.current);
+            multitouchGuardTimerRef.current = window.setTimeout(
+                clearMultitouchGuard,
+                350
+            );
+        };
+
         const handleTouchStart = (e) => {
+
+            if (e.touches.length >= 2) {
+                window.clearTimeout(multitouchGuardTimerRef.current);
+                multitouchGuardTimerRef.current = null;
+                multitouchGuardRef.current = true;
+            }
 
             // 🔥 solo 2 dedos
             if (e.touches.length !== 2) return;
@@ -95,17 +116,33 @@ export default function TapGrid({ sort }) {
             lastTouchTime = now;
         };
 
+        const handleTouchEnd = (e) => {
+            if (multitouchGuardRef.current && e.touches.length === 0) {
+                armGuardCleanup();
+            }
+        };
+
+        const handleTouchCancel = () => {
+            window.clearTimeout(multitouchGuardTimerRef.current);
+            clearMultitouchGuard();
+        };
+
         window.addEventListener(
             "touchstart",
             handleTouchStart,
             { passive: true }
         );
+        window.addEventListener("touchend", handleTouchEnd, { passive: true });
+        window.addEventListener("touchcancel", handleTouchCancel, { passive: true });
 
         return () => {
             window.removeEventListener(
                 "touchstart",
                 handleTouchStart
             );
+            window.removeEventListener("touchend", handleTouchEnd);
+            window.removeEventListener("touchcancel", handleTouchCancel);
+            window.clearTimeout(multitouchGuardTimerRef.current);
         };
 
     }, []);
@@ -176,7 +213,13 @@ export default function TapGrid({ sort }) {
                                 <div
                                     key={`${beer.id}-${index}`}
                                     data-atlas-tap-card={beer.id}
-                                    onClick={() => {
+                                    onClick={(event) => {
+
+                                        if (multitouchGuardRef.current) {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            return;
+                                        }
 
                                         if (beer.is_featured) {
 
