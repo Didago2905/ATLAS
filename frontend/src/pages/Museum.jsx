@@ -495,7 +495,7 @@ export default function Museum() {
                     height: "100dvh",
                     background: "#000",
                     overflowX: "auto",
-                    scrollSnapType: "x proximity",
+                    scrollSnapType: "x mandatory",
                     scrollBehavior: "smooth",
                     position: "relative",
                 }}
