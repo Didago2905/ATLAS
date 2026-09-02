@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import useCatalogSession from "../catalog/useCatalogSession";
 import BeerCoverV2 from "../components/BeerCoverV2";
+import DismissibleArtworkOverlay from "../museum/presentation/DismissibleArtworkOverlay";
 import { createArchive } from "../museum/archive";
 import { createExhibition } from "../museum/exhibition";
 import { hideControls, showControls } from "../museum/animation";
@@ -44,6 +45,11 @@ export default function Museum() {
     if (!selectionRef.current) {
         selectionRef.current = createSelection();
     }
+
+    const requestCloseArtwork = () => {
+        const selectedArtwork = selectionRef.current.clearSelection();
+        setActiveItem(selectedArtwork);
+    };
 
     const [showUI, setShowUI] = useState(true);
 
@@ -609,31 +615,10 @@ export default function Museum() {
             </div>
 
             {activeItem && (
-                <div
-                    onClick={() => setActiveItem(selectionRef.current.clearSelection())}
-                    style={{
-                        position: "fixed",
-                        top: 0,
-                        left: 0,
-                        width: "100vw",
-                        height: "100vh",
-                        background: "rgba(0,0,0,0.97)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 9999,
-                        cursor: "pointer",
-                    }}
-                >
-                    <img
-                        src={activeItem.image_url}
-                        style={{
-                            maxWidth: "95%",
-                            maxHeight: "95%",
-                            objectFit: "contain",
-                        }}
-                    />
-                </div>
+                <DismissibleArtworkOverlay
+                    artwork={activeItem}
+                    onDismiss={requestCloseArtwork}
+                />
             )}
         </>
     );
