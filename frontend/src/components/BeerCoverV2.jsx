@@ -44,6 +44,8 @@ export default function BeerCoverV2({ beer, onClick, stageRef }) {
     return (
         <div
             ref={layoutRef}
+            data-atlas-museum-card
+            data-atlas-museum-card-id={beer?.id}
             onClick={(e) => {
                 e.stopPropagation();
 
@@ -70,6 +72,13 @@ export default function BeerCoverV2({ beer, onClick, stageRef }) {
                         container.offsetWidth / 2 +
                         layoutRef.current.offsetWidth / 2;
 
+                    window.__ATLAS_MUSEUM_MOTION_PROBE__
+                        ?.markNavigationCenterRequest({
+                            cardId: beer?.id ?? null,
+                            targetLeft: scrollTo,
+                            layoutCenterDelta: elementCenter - centerX,
+                        });
+
                     scrollStageTo(container, scrollTo);
 
                     return;
@@ -88,6 +97,7 @@ export default function BeerCoverV2({ beer, onClick, stageRef }) {
         >
             <div
                 ref={visualRef}
+                data-atlas-museum-visual
                 style={{
                     width: "100%",
                     height: "100%",

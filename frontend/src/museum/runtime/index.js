@@ -37,6 +37,12 @@ export function observeStageScroll(stage, callback) {
     };
 }
 export function scrollStageTo(stage, left) {
+    window.__ATLAS_MUSEUM_MOTION_PROBE__
+        ?.markNavigationCenterStart({
+            targetLeft: left,
+            behavior: "smooth",
+        });
+
     stage.scrollTo({
         left,
         behavior: "smooth",

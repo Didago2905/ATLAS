@@ -48,6 +48,8 @@ export default function Museum() {
 
     const requestCloseArtwork = () => {
         const selectedArtwork = selectionRef.current.clearSelection();
+        window.__ATLAS_MUSEUM_MOTION_PROBE__
+            ?.markSelectionChange({ artworkId: null });
         setActiveItem(selectedArtwork);
     };
 
@@ -174,6 +176,36 @@ export default function Museum() {
         };
 
     }, []);
+
+    useEffect(() => {
+        const motionProbeEnabled =
+            new URLSearchParams(window.location.search).get("motionProbe") === "1";
+
+        if (!motionProbeEnabled || !containerRef.current) return;
+
+        let cancelled = false;
+        let uninstallProbe = null;
+        let uninstallProbeControls = null;
+
+        Promise.all([
+            import("../museum/diagnostics/museumMotionProbe"),
+            import("../museum/diagnostics/museumMotionProbeControls"),
+        ])
+            .then(([{ installMuseumMotionProbe }, { installMuseumMotionProbeControls }]) => {
+                if (cancelled) return;
+                uninstallProbe = installMuseumMotionProbe(containerRef.current);
+                uninstallProbeControls = installMuseumMotionProbeControls();
+            })
+            .catch(error => {
+                console.error("Museum motion probe failed to load:", error);
+            });
+
+        return () => {
+            cancelled = true;
+            uninstallProbeControls?.();
+            uninstallProbe?.();
+        };
+    }, [museumData]);
 
     const readMuseumProbeSnapshot = (phase) => {
         const container = containerRef.current;
@@ -601,7 +633,15 @@ export default function Museum() {
                             stageRef={containerRef}
                             scrollLeft={scrollLeft}
                             containerWidth={containerWidth}
-                            onClick={() => setActiveItem(selectionRef.current.selectArtwork(item))}
+                            onClick={() => {
+                                const selectedArtwork =
+                                    selectionRef.current.selectArtwork(item);
+                                window.__ATLAS_MUSEUM_MOTION_PROBE__
+                                    ?.markSelectionChange({
+                                        artworkId: selectedArtwork?.id ?? null,
+                                    });
+                                setActiveItem(selectedArtwork);
+                            }}
                         />
                     ))}
 
