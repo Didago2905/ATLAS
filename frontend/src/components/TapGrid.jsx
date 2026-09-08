@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import useCatalogSession from "../catalog/useCatalogSession";
 import { useNavigate } from "react-router-dom";
 import { audit } from "../utils/audit";
+import { createTapTimingLab } from "../diagnostics/tapTimingLab";
+import TapTimingLabPanel from "../diagnostics/TapTimingLabPanel";
 
 export default function TapGrid({ sort }) {
     const { beers } = useCatalogSession();
@@ -14,6 +16,22 @@ export default function TapGrid({ sort }) {
     const [mobileGridMode, setMobileGridMode] = useState(() => {
         return localStorage.getItem("tap_grid_mode") || "focus";
     });
+    const mobileGridModeRef = useRef(mobileGridMode);
+    const tapTimingLabEnabled = window.location.pathname === "/"
+        && new URLSearchParams(window.location.search).get("tapTimingLab") === "1";
+    const [tapTimingLab] = useState(() =>
+        tapTimingLabEnabled ? createTapTimingLab() : null
+    );
+
+    useEffect(() => {
+        if (!tapTimingLabEnabled) return undefined;
+        window.ATLAS_TAP_TIMING_LAB = tapTimingLab;
+        return () => {
+            if (window.ATLAS_TAP_TIMING_LAB === tapTimingLab) {
+                delete window.ATLAS_TAP_TIMING_LAB;
+            }
+        };
+    }, [tapTimingLabEnabled, tapTimingLab]);
 
     console.log("GRID MODE:", mobileGridMode);
 
@@ -76,6 +94,15 @@ export default function TapGrid({ sort }) {
     useEffect(() => {
 
         let lastTouchTime = 0;
+        let lastPhysicalChordIdentifiers = null;
+
+        const normalizeTouchIdentifiers = touches =>
+            Array.from(touches, touch => touch.identifier).sort((a, b) => a - b);
+
+        const haveSameIdentifiers = (left, right) =>
+            left !== null
+            && left.length === right.length
+            && left.every((identifier, index) => identifier === right[index]);
 
         const clearMultitouchGuard = () => {
             multitouchGuardRef.current = false;
@@ -92,6 +119,8 @@ export default function TapGrid({ sort }) {
 
         const handleTouchStart = (e) => {
 
+            const rawEventSequence = tapTimingLab?.recordTouchStart(e);
+
             if (e.touches.length >= 2) {
                 window.clearTimeout(multitouchGuardTimerRef.current);
                 multitouchGuardTimerRef.current = null;
@@ -101,28 +130,72 @@ export default function TapGrid({ sort }) {
             // 🔥 solo 2 dedos
             if (e.touches.length !== 2) return;
 
+            const normalizedIdentifiers = normalizeTouchIdentifiers(e.touches);
+            const samePhysicalChord = haveSameIdentifiers(
+                lastPhysicalChordIdentifiers,
+                normalizedIdentifiers
+            );
+
+            tapTimingLab?.recordPhysicalChord({
+                classification: samePhysicalChord
+                    ? "SAME_PHYSICAL_CHORD"
+                    : "NEW_PHYSICAL_CHORD",
+                identifiers: normalizedIdentifiers,
+                rawEventSequence,
+            });
+
+            if (samePhysicalChord) return;
+
+            lastPhysicalChordIdentifiers = normalizedIdentifiers;
             const now = Date.now();
+            const previousLastTouchTime = lastTouchTime;
+            const delta = now - previousLastTouchTime;
+            const recognized = delta < 350;
+            const modeBefore = mobileGridModeRef.current;
 
             // 🔥 doble tap rápido
-            if (now - lastTouchTime < 350) {
+            if (recognized) {
 
                 setMobileGridMode(prev =>
                     prev === "focus"
                         ? "gallery"
                         : "focus"
                 );
+                mobileGridModeRef.current = modeBefore === "focus" ? "gallery" : "focus";
             }
 
             lastTouchTime = now;
+            tapTimingLab?.recordProductiveDecision({
+                recognized,
+                deltaMs: delta,
+                lastTouchTimeBefore: previousLastTouchTime,
+                lastTouchTimeAfter: lastTouchTime,
+                thresholdMs: 350,
+                modeBefore,
+                modeAfter: recognized ? mobileGridModeRef.current : modeBefore,
+                rawEventSequence,
+            });
         };
 
         const handleTouchEnd = (e) => {
+            tapTimingLab?.recordTouchEnd(e);
+            if (lastPhysicalChordIdentifiers !== null) {
+                const activeIdentifiers = new Set(
+                    Array.from(e.touches, touch => touch.identifier)
+                );
+                const chordStillActive = lastPhysicalChordIdentifiers.every(
+                    identifier => activeIdentifiers.has(identifier)
+                );
+                if (!chordStillActive) lastPhysicalChordIdentifiers = null;
+            }
             if (multitouchGuardRef.current && e.touches.length === 0) {
                 armGuardCleanup();
             }
         };
 
-        const handleTouchCancel = () => {
+        const handleTouchCancel = (e) => {
+            tapTimingLab?.recordCancel(e);
+            lastPhysicalChordIdentifiers = null;
             window.clearTimeout(multitouchGuardTimerRef.current);
             clearMultitouchGuard();
         };
@@ -145,12 +218,13 @@ export default function TapGrid({ sort }) {
             window.clearTimeout(multitouchGuardTimerRef.current);
         };
 
-    }, []);
+    }, [tapTimingLab]);
 
     const isLoading = beers.length === 0;
 
     return (
         <>
+            {tapTimingLab && <TapTimingLabPanel lab={tapTimingLab} />}
             <div
                 style={{
                     position: "relative",
