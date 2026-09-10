@@ -758,6 +758,7 @@ export default function Museum() {
                             key={item.id}
                             beer={item}
                             stageRef={containerRef}
+                            visualScale={isLandscape ? 0.95 : 1}
                             scrollLeft={scrollLeft}
                             containerWidth={containerWidth}
                             onClick={() => {

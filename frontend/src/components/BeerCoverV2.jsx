@@ -3,7 +3,7 @@ import { createAnimation } from "../museum/animation";
 import { resolveArtworkNavigation } from "../museum/navigation";
 import { scrollStageTo } from "../museum/runtime";
 
-export default function BeerCoverV2({ beer, onClick, stageRef }) {
+export default function BeerCoverV2({ beer, onClick, stageRef, visualScale = 1 }) {
 
     const layoutRef = useRef(null);
     const visualRef = useRef(null);
@@ -14,7 +14,7 @@ export default function BeerCoverV2({ beer, onClick, stageRef }) {
     useEffect(() => {
         let frame;
 
-        const animation = createAnimation();
+        const animation = createAnimation({ baseScale: visualScale });
 
         const update = () => {
             if (!visualRef.current) return;
@@ -39,7 +39,7 @@ export default function BeerCoverV2({ beer, onClick, stageRef }) {
         update();
 
         return () => cancelAnimationFrame(frame);
-    }, []);
+    }, [visualScale]);
 
     return (
         <div
@@ -98,6 +98,7 @@ export default function BeerCoverV2({ beer, onClick, stageRef }) {
             <div
                 ref={visualRef}
                 data-atlas-museum-visual
+                data-atlas-museum-visual-scale={visualScale}
                 style={{
                     width: "100%",
                     height: "100%",

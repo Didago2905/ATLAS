@@ -385,3 +385,39 @@ test("outside interaction closes the popover without blocking BeerCoverV2", asyn
     await expect(popover).toHaveCount(0);
     await expect(page.locator("[data-atlas-museum-artwork-overlay]")).toBeVisible();
 });
+
+test("landscape scales only the visual layer while portrait and layout slots stay stable", async ({ page }) => {
+    const readCards = () => page.locator("[data-atlas-museum-card]").evaluateAll(cards =>
+        cards.map(card => {
+            const visual = card.querySelector("[data-atlas-museum-visual]");
+            if (!visual) throw new Error("Museum visual layer is unavailable");
+            const matrix = new DOMMatrixReadOnly(getComputedStyle(visual).transform);
+            return {
+                slotWidth: (card as HTMLElement).offsetWidth,
+                slotHeight: (card as HTMLElement).offsetHeight,
+                baseScale: Number(visual.getAttribute("data-atlas-museum-visual-scale")),
+                renderedScale: Math.hypot(matrix.m11, matrix.m12, matrix.m13),
+            };
+        })
+    );
+
+    await page.setViewportSize({ width: 700, height: 900 });
+    await openMuseum(page);
+    await expect.poll(async () => (await readCards())[0].baseScale).toBe(1);
+    const portrait = await readCards();
+
+    await page.setViewportSize({ width: 900, height: 700 });
+    await expect.poll(async () => (await readCards())[0].baseScale).toBe(0.95);
+    const landscape = await readCards();
+
+    expect(landscape.map(card => [card.slotWidth, card.slotHeight]))
+        .toEqual(portrait.map(card => [card.slotWidth, card.slotHeight]));
+    expect(portrait.every(card => card.baseScale === 1)).toBe(true);
+    expect(landscape.every(card => card.baseScale === 0.95)).toBe(true);
+
+    const portraitScales = portrait.map(card => card.renderedScale);
+    const landscapeScales = landscape.map(card => card.renderedScale);
+    expect(Math.max(...portraitScales)).toBeGreaterThan(Math.min(...portraitScales));
+    expect(Math.max(...landscapeScales)).toBeGreaterThan(Math.min(...landscapeScales));
+    expect(Math.max(...landscapeScales) / Math.max(...portraitScales)).toBeCloseTo(0.95, 1);
+});

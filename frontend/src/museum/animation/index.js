@@ -66,7 +66,7 @@ export function showControls(setVisible) {
  * The engine owns visual continuity and
  * visual state calculations.
  */
-export function createAnimation() {
+export function createAnimation({ baseScale = 1 } = {}) {
 
     let lastRotate = 0;
     let lastScale = 0;
@@ -93,7 +93,7 @@ export function createAnimation() {
             rotate = Math.round(rotate / 2) * 2;
         }
 
-        let scale = 1 - intensity * 0.24;
+        let scale = (1 - intensity * 0.24) * baseScale;
         scale = Math.round(scale * 1000) / 1000;
 
         const translateZ =
