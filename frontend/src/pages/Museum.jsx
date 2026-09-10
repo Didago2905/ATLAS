@@ -2,6 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import useCatalogSession from "../catalog/useCatalogSession";
 import BeerCoverV2 from "../components/BeerCoverV2";
 import DismissibleArtworkOverlay from "../museum/presentation/DismissibleArtworkOverlay";
+import {
+    MUSEUM_BACKGROUNDS,
+    MUSEUM_BACKGROUND_STORAGE_KEY,
+    resolveMuseumBackground,
+} from "../museum/presentation/backgrounds";
 import { createArchive } from "../museum/archive";
 import { createExhibition } from "../museum/exhibition";
 import { hideControls, showControls } from "../museum/animation";
@@ -54,8 +59,36 @@ export default function Museum() {
     };
 
     const [showUI, setShowUI] = useState(true);
+    const [backgroundId, setBackgroundId] = useState(() =>
+        resolveMuseumBackground(
+            localStorage.getItem(MUSEUM_BACKGROUND_STORAGE_KEY)
+        ).id
+    );
+    const [backgroundMenuOpen, setBackgroundMenuOpen] = useState(false);
+    const backgroundControlRef = useRef(null);
+    const selectedBackground = resolveMuseumBackground(backgroundId);
 
     const containerRef = useRef(null);
+
+    useEffect(() => {
+        localStorage.setItem(MUSEUM_BACKGROUND_STORAGE_KEY, backgroundId);
+    }, [backgroundId]);
+
+    useEffect(() => {
+        if (!backgroundMenuOpen) return undefined;
+
+        const closeOnOutsidePointer = event => {
+            if (!backgroundControlRef.current?.contains(event.target)) {
+                setBackgroundMenuOpen(false);
+            }
+        };
+
+        document.addEventListener("pointerdown", closeOnOutsidePointer);
+
+        return () => {
+            document.removeEventListener("pointerdown", closeOnOutsidePointer);
+        };
+    }, [backgroundMenuOpen]);
 
     // 🔥 scroll state
     const [scrollLeft, setScrollLeft] = useState(0);
@@ -352,6 +385,7 @@ export default function Museum() {
         let timeout;
 
         const hideUI = () => {
+            setBackgroundMenuOpen(false);
             hideControls(setShowUI);
 
             clearTimeout(timeout);
@@ -390,7 +424,14 @@ export default function Museum() {
         : "calc(50vw - 150px)";
 
     if (!data.length) {
-        return <div style={{ height: "100dvh", background: "#000" }} />;
+        return (
+            <div
+                style={{
+                    height: "100dvh",
+                    background: selectedBackground.value,
+                }}
+            />
+        );
     }
 
     return (
@@ -531,7 +572,7 @@ export default function Museum() {
                 data-atlas-museum-stage
                 style={{
                     height: "100dvh",
-                    background: "#000",
+                    background: selectedBackground.value,
                     overflowX: "auto",
                     scrollSnapType: "x mandatory",
                     scrollBehavior: "smooth",
@@ -563,13 +604,14 @@ export default function Museum() {
                     }}
                 >
                     <button
-                        onClick={() =>
+                        onClick={() => {
+                            setBackgroundMenuOpen(false);
                             setMode(
                                 selectMuseumMode(
                                     MUSEUM_MODES.FICHAS
                                 )
-                            )
-                        }
+                            );
+                        }}
                         style={{
                             padding: "10px",
                             borderRadius: "50%",
@@ -585,13 +627,14 @@ export default function Museum() {
                     </button>
 
                     <button
-                        onClick={() =>
+                        onClick={() => {
+                            setBackgroundMenuOpen(false);
                             setMode(
                                 selectMuseumMode(
                                     MUSEUM_MODES.TAP
                                 )
-                            )
-                        }
+                            );
+                        }}
                         style={{
                             padding: "10px",
                             borderRadius: "50%",
@@ -605,6 +648,90 @@ export default function Museum() {
                     >
                         ▦
                     </button>
+
+                    <div
+                        ref={backgroundControlRef}
+                        style={{ position: "relative" }}
+                    >
+                        <button
+                            type="button"
+                            data-atlas-museum-background-trigger
+                            aria-label="Seleccionar fondo"
+                            aria-expanded={backgroundMenuOpen}
+                            onClick={() => setBackgroundMenuOpen(open => !open)}
+                            style={{
+                                padding: "10px",
+                                borderRadius: "50%",
+                                border: "1px solid #333",
+                                background: "#111",
+                                color: "#fff",
+                                cursor: "pointer",
+                                width: "44px",
+                                height: "44px",
+                                fontSize: "18px",
+                            }}
+                        >
+                            ◐
+                        </button>
+
+                        {backgroundMenuOpen && (
+                            <div
+                                data-atlas-museum-background-popover
+                                role="menu"
+                                aria-label="Fondos de Museum"
+                                style={{
+                                    position: "absolute",
+                                    top: isLandscape ? "50%" : "calc(100% + 8px)",
+                                    left: isLandscape ? "calc(100% + 8px)" : "50%",
+                                    transform: isLandscape
+                                        ? "translateY(-50%)"
+                                        : "translateX(-50%)",
+                                    display: "flex",
+                                    gap: "8px",
+                                    padding: "8px",
+                                    border: "1px solid rgba(255,255,255,0.18)",
+                                    borderRadius: "999px",
+                                    background: "rgba(0,0,0,0.72)",
+                                    boxShadow: "0 4px 16px rgba(0,0,0,0.28)",
+                                    backdropFilter: "blur(8px)",
+                                    whiteSpace: "nowrap",
+                                }}
+                            >
+                                {MUSEUM_BACKGROUNDS.map(background => {
+                                    const selected = background.id === backgroundId;
+
+                                    return (
+                                        <button
+                                            key={background.id}
+                                            type="button"
+                                            role="menuitemradio"
+                                            aria-label={background.label}
+                                            aria-checked={selected}
+                                            data-atlas-museum-background-option={background.id}
+                                            onClick={() => {
+                                                setBackgroundId(background.id);
+                                                setBackgroundMenuOpen(false);
+                                            }}
+                                            style={{
+                                                width: "30px",
+                                                height: "30px",
+                                                padding: 0,
+                                                borderRadius: "50%",
+                                                border: selected
+                                                    ? "2px solid rgba(255,255,255,0.95)"
+                                                    : "1px solid rgba(255,255,255,0.42)",
+                                                background: background.value,
+                                                boxShadow: selected
+                                                    ? "0 0 0 2px rgba(0,0,0,0.75)"
+                                                    : "none",
+                                                cursor: "pointer",
+                                            }}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div
@@ -634,6 +761,7 @@ export default function Museum() {
                             scrollLeft={scrollLeft}
                             containerWidth={containerWidth}
                             onClick={() => {
+                                setBackgroundMenuOpen(false);
                                 const selectedArtwork =
                                     selectionRef.current.selectArtwork(item);
                                 window.__ATLAS_MUSEUM_MOTION_PROBE__
@@ -657,6 +785,7 @@ export default function Museum() {
             {activeItem && (
                 <DismissibleArtworkOverlay
                     artwork={activeItem}
+                    background={selectedBackground.value}
                     onDismiss={requestCloseArtwork}
                 />
             )}

@@ -20,8 +20,9 @@ const initialGesture = () => ({
     dy: 0,
 });
 
-export default function DismissibleArtworkOverlay({ artwork, onDismiss }) {
+export default function DismissibleArtworkOverlay({ artwork, background, onDismiss }) {
     const surfaceRef = useRef(null);
+    const backdropRef = useRef(null);
     const visualRef = useRef(null);
     const gestureRef = useRef(initialGesture());
     const suppressNextClickRef = useRef(false);
@@ -58,9 +59,8 @@ export default function DismissibleArtworkOverlay({ artwork, onDismiss }) {
             visualRef.current.style.transform =
                 `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
         }
-        if (surfaceRef.current) {
-            surfaceRef.current.style.background =
-                `rgba(0,0,0,${backdropAlpha})`;
+        if (backdropRef.current) {
+            backdropRef.current.style.opacity = String(backdropAlpha / 0.97);
         }
     };
 
@@ -90,15 +90,15 @@ export default function DismissibleArtworkOverlay({ artwork, onDismiss }) {
             visualRef.current.style.transition =
                 `transform ${RESTORE_DURATION_MS}ms ${TRANSITION_EASING}`;
         }
-        if (surfaceRef.current) {
-            surfaceRef.current.style.transition =
-                `background ${RESTORE_DURATION_MS}ms ${TRANSITION_EASING}`;
+        if (backdropRef.current) {
+            backdropRef.current.style.transition =
+                `opacity ${RESTORE_DURATION_MS}ms ${TRANSITION_EASING}`;
         }
 
         setVisual({ x: 0, y: 0, scale: 1, backdropAlpha: 0.97 });
         waitForTransition(RESTORE_DURATION_MS, () => {
             if (visualRef.current) visualRef.current.style.transition = "";
-            if (surfaceRef.current) surfaceRef.current.style.transition = "";
+            if (backdropRef.current) backdropRef.current.style.transition = "";
             gestureRef.current = initialGesture();
         });
     };
@@ -107,15 +107,19 @@ export default function DismissibleArtworkOverlay({ artwork, onDismiss }) {
         const gesture = gestureRef.current;
         gesture.phase = "dismissing";
         const viewportHeight = window.visualViewport?.height || window.innerHeight;
-        const targetY = Math.max(gesture.dy + 120, viewportHeight * 0.55);
+        const direction = gesture.dy < 0 ? -1 : 1;
+        const targetY = direction * Math.max(
+            Math.abs(gesture.dy) + 120,
+            viewportHeight * 0.55
+        );
 
         if (visualRef.current) {
             visualRef.current.style.transition =
                 `transform ${DISMISS_DURATION_MS}ms ${TRANSITION_EASING}`;
         }
-        if (surfaceRef.current) {
-            surfaceRef.current.style.transition =
-                `background ${DISMISS_DURATION_MS}ms ${TRANSITION_EASING}`;
+        if (backdropRef.current) {
+            backdropRef.current.style.transition =
+                `opacity ${DISMISS_DURATION_MS}ms ${TRANSITION_EASING}`;
         }
 
         setVisual({
@@ -153,7 +157,7 @@ export default function DismissibleArtworkOverlay({ artwork, onDismiss }) {
         if (gesture.phase === "pending") {
             if (Math.hypot(dx, dy) < DRAG_SLOP) return;
 
-            if (dy <= 0 || Math.abs(dy) < VERTICAL_INTENT_RATIO * Math.abs(dx)) {
+            if (Math.abs(dy) < VERTICAL_INTENT_RATIO * Math.abs(dx)) {
                 gesture.phase = "cancelled";
                 suppressNextClickRef.current = true;
                 return;
@@ -169,15 +173,15 @@ export default function DismissibleArtworkOverlay({ artwork, onDismiss }) {
             MAX_DISMISS_DISTANCE,
             Math.max(MIN_DISMISS_DISTANCE, viewportHeight * DISMISS_VIEWPORT_RATIO)
         );
-        const progress = Math.min(1, Math.max(0, dy) / dismissDistance);
+        const progress = Math.min(1, Math.abs(dy) / dismissDistance);
         const scaleProgress = Math.min(
             1,
-            Math.max(0, dy) / (dismissDistance * SCALE_DISTANCE_MULTIPLIER)
+            Math.abs(dy) / (dismissDistance * SCALE_DISTANCE_MULTIPLIER)
         );
 
         setVisual({
             x: dx,
-            y: Math.max(0, dy),
+            y: dy,
             scale: 1 - (1 - MIN_SCALE) * scaleProgress,
             backdropAlpha: 0.97 - 0.4 * progress,
         });
@@ -198,7 +202,7 @@ export default function DismissibleArtworkOverlay({ artwork, onDismiss }) {
                 MAX_DISMISS_DISTANCE,
                 Math.max(MIN_DISMISS_DISTANCE, viewportHeight * DISMISS_VIEWPORT_RATIO)
             );
-            if (pointerUpDy >= dismissDistance) dismiss();
+            if (Math.abs(pointerUpDy) >= dismissDistance) dismiss();
             else restore();
             return;
         }
@@ -253,7 +257,7 @@ export default function DismissibleArtworkOverlay({ artwork, onDismiss }) {
                 inset: 0,
                 width: "100vw",
                 height: "100vh",
-                background: "rgba(0,0,0,0.97)",
+                background: "transparent",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -266,10 +270,24 @@ export default function DismissibleArtworkOverlay({ artwork, onDismiss }) {
             }}
         >
             <div
+                ref={backdropRef}
+                data-atlas-museum-artwork-background
+                aria-hidden="true"
+                style={{
+                    position: "absolute",
+                    inset: 0,
+                    background,
+                    opacity: 1,
+                    pointerEvents: "none",
+                }}
+            />
+            <div
                 ref={visualRef}
                 data-atlas-museum-artwork-visual
                 style={{
                     display: "flex",
+                    position: "relative",
+                    zIndex: 1,
                     alignItems: "center",
                     justifyContent: "center",
                     maxWidth: "95%",

@@ -1,12 +1,58 @@
 import { test, expect } from "@playwright/test";
 
+const museumUrl = "http://bs-local.com:3000/museum";
+const image = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='300'%3E%3Crect width='100%25' height='100%25' fill='%23222'/%3E%3C/svg%3E";
+const museumItems = [
+    { id: "museum-1", name: "Museum One", type: "fichas/antiguas", image_url: image },
+    { id: "museum-2", name: "Museum Two", type: "fichas/antiguas", image_url: image },
+    { id: "museum-3", name: "Museum Three", type: "fichas/antiguas", image_url: image },
+];
+const tapItems = [
+    { id: 201, name: "Tap One", brewery: "Tiburon", style: "IPA", color: "#222222", abv: 5, image_url: image, is_available: true, is_featured: false, tap_position: 1 },
+];
+
+async function routeMuseumData(page) {
+    await page.route("**/api/public/museum", route =>
+        route.fulfill({ json: museumItems })
+    );
+    await page.route("**/api/public/tap", route =>
+        route.fulfill({ json: tapItems })
+    );
+}
+
+async function openMuseum(page) {
+    await routeMuseumData(page);
+    await page.goto(museumUrl);
+    await expect(page.locator("[data-atlas-museum-stage]")).toBeVisible();
+    await expect(page.locator("[data-atlas-museum-card]")).toHaveCount(3);
+}
+
+async function openFirstArtwork(page) {
+    await page.locator('[data-atlas-museum-card-id="museum-1"]').click();
+    await expect(page.locator("[data-atlas-museum-artwork-overlay]")).toBeVisible();
+}
+
+async function dragArtwork(page, deltaY) {
+    const overlay = page.locator("[data-atlas-museum-artwork-overlay]");
+    const box = await overlay.boundingBox();
+
+    if (!box) throw new Error("Artwork overlay has no bounding box");
+
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + deltaY, { steps: 5 });
+    await page.mouse.up();
+}
+
 test("ATLAS Museum core behavior", async ({ page }) => {
     test.setTimeout(90_000);
 
     const criticalErrors = [];
     const stageSelector = "[data-atlas-museum-stage]";
     const trackSelector = "[data-atlas-museum-track]";
-    const overlay = page.locator('div[style*="z-index: 9999;"]');
+    const overlay = page.locator("[data-atlas-museum-artwork-overlay]");
 
     page.on("pageerror", error => {
         criticalErrors.push(`[pageerror] ${error.message}`);
@@ -18,7 +64,8 @@ test("ATLAS Museum core behavior", async ({ page }) => {
         }
     });
 
-    await page.goto("http://bs-local.com:3000/museum");
+    await routeMuseumData(page);
+    await page.goto(museumUrl);
 
     const stage = page.locator(stageSelector);
     const track = page.locator(trackSelector);
@@ -84,7 +131,7 @@ test("ATLAS Museum core behavior", async ({ page }) => {
     await expect(stage).toBeVisible();
     await expect(track).toBeVisible();
     await expect(selector).toBeVisible();
-    await expect(selector.getByRole("button")).toHaveCount(2);
+    await expect(selector.getByRole("button")).toHaveCount(3);
     await expect.poll(async () => (await readTrackSnapshot()).cardCount)
         .toBeGreaterThan(0);
 
@@ -143,4 +190,198 @@ test("ATLAS Museum core behavior", async ({ page }) => {
     expect(tap.cardCount).toBeGreaterThan(0);
     await expect(await getSlot(0)).toBeVisible();
     expect(criticalErrors).toEqual([]);
+});
+
+test("Museum background defaults to black without a stored preference", async ({ page }) => {
+    await openMuseum(page);
+
+    const stage = page.locator("[data-atlas-museum-stage]");
+    await expect.poll(() => stage.evaluate(element =>
+        getComputedStyle(element).backgroundColor
+    )).toBe("rgb(0, 0, 0)");
+    await expect.poll(() => page.evaluate(() =>
+        localStorage.getItem("atlas_museum_background")
+    )).toBe("black");
+});
+
+test("Museum background rejects an invalid stored preference", async ({ page }) => {
+    await page.addInitScript(() => {
+        localStorage.setItem("atlas_museum_background", "invalid-background");
+    });
+    await openMuseum(page);
+
+    const stage = page.locator("[data-atlas-museum-stage]");
+    await expect.poll(() => stage.evaluate(element =>
+        getComputedStyle(element).backgroundColor
+    )).toBe("rgb(0, 0, 0)");
+    await expect.poll(() => page.evaluate(() =>
+        localStorage.getItem("atlas_museum_background")
+    )).toBe("black");
+});
+
+test("Museum background selector opens, closes, and applies all canonical backgrounds", async ({ page }) => {
+    await openMuseum(page);
+
+    const stage = page.locator("[data-atlas-museum-stage]");
+    const trigger = page.locator("[data-atlas-museum-background-trigger]");
+    const popover = page.locator("[data-atlas-museum-background-popover]");
+
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await trigger.click();
+    await expect(popover).toBeVisible();
+    await expect(popover.getByRole("menuitemradio")).toHaveCount(4);
+    await trigger.click();
+    await expect(popover).toHaveCount(0);
+
+    const expectedCenterColors = {
+        "gallery-light": "rgb(240, 237, 230)",
+        petrol: "rgb(52, 70, 77)",
+        burgundy: "rgb(89, 48, 57)",
+    };
+
+    for (const id of ["black", "gallery-light", "petrol", "burgundy"]) {
+        await trigger.click();
+        const option = page.locator(`[data-atlas-museum-background-option="${id}"]`);
+        await option.click();
+        await expect(popover).toHaveCount(0);
+        await expect.poll(() => page.evaluate(() =>
+            localStorage.getItem("atlas_museum_background")
+        )).toBe(id);
+
+        const background = await stage.evaluate(element => ({
+            color: getComputedStyle(element).backgroundColor,
+            image: getComputedStyle(element).backgroundImage,
+        }));
+
+        if (id === "black") {
+            expect(background.color).toBe("rgb(0, 0, 0)");
+        } else {
+            expect(background.image).toContain("radial-gradient");
+            expect(background.image).toContain(expectedCenterColors[id]);
+        }
+    }
+});
+
+test("Museum background preference survives reload", async ({ page }) => {
+    await openMuseum(page);
+
+    await page.locator("[data-atlas-museum-background-trigger]").click();
+    await page.locator('[data-atlas-museum-background-option="burgundy"]').click();
+    await page.reload();
+
+    await expect(page.locator("[data-atlas-museum-stage]")).toBeVisible();
+    await expect.poll(() => page.locator("[data-atlas-museum-stage]").evaluate(element =>
+        getComputedStyle(element).backgroundImage
+    )).toContain("radial-gradient");
+    await page.locator("[data-atlas-museum-background-trigger]").click();
+    await expect(page.locator('[data-atlas-museum-background-option="burgundy"]'))
+        .toHaveAttribute("aria-checked", "true");
+});
+
+test("Museum normalizes legacy background aliases to canonical IDs", async ({ page }) => {
+    await openMuseum(page);
+
+    const aliases = [
+        ["bone", "gallery-light"],
+        ["dark-gradient", "petrol"],
+        ["sand-gradient", "burgundy"],
+    ];
+
+    for (const [legacyId, canonicalId] of aliases) {
+        await page.evaluate(id => {
+            localStorage.setItem("atlas_museum_background", id);
+        }, legacyId);
+        await page.reload();
+        await expect(page.locator("[data-atlas-museum-stage]")).toBeVisible();
+        await expect.poll(() => page.evaluate(() =>
+            localStorage.getItem("atlas_museum_background")
+        )).toBe(canonicalId);
+        await page.locator("[data-atlas-museum-background-trigger]").click();
+        await expect(page.locator(
+            `[data-atlas-museum-background-option="${canonicalId}"]`
+        )).toHaveAttribute("aria-checked", "true");
+    }
+});
+
+test("full artwork preserves the selected Museum background", async ({ page }) => {
+    await openMuseum(page);
+
+    await page.locator("[data-atlas-museum-background-trigger]").click();
+    await page.locator('[data-atlas-museum-background-option="petrol"]').click();
+    const stageBackground = await page.locator("[data-atlas-museum-stage]")
+        .evaluate(element => getComputedStyle(element).backgroundImage);
+
+    await openFirstArtwork(page);
+
+    await expect.poll(() => page.locator("[data-atlas-museum-artwork-background]")
+        .evaluate(element => getComputedStyle(element).backgroundImage))
+        .toBe(stageBackground);
+});
+
+test("artwork dismisses with equivalent downward and upward drags", async ({ page }) => {
+    await openMuseum(page);
+
+    await openFirstArtwork(page);
+    await dragArtwork(page, 200);
+    await expect(page.locator("[data-atlas-museum-artwork-overlay]")).toHaveCount(0);
+
+    await openFirstArtwork(page);
+    await dragArtwork(page, -200);
+    await expect(page.locator("[data-atlas-museum-artwork-overlay]")).toHaveCount(0);
+});
+
+test("short artwork drags restore in both vertical directions", async ({ page }) => {
+    await openMuseum(page);
+    await openFirstArtwork(page);
+
+    for (const deltaY of [40, -40]) {
+        await dragArtwork(page, deltaY);
+        const visual = page.locator("[data-atlas-museum-artwork-visual]");
+        await expect(visual).toBeVisible();
+        await expect.poll(() => visual.evaluate(element => {
+            const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+            return Math.max(Math.abs(matrix.m41), Math.abs(matrix.m42));
+        })).toBeLessThanOrEqual(1);
+    }
+});
+
+test("Museum navigation hides the selector and closes its popover", async ({ page }) => {
+    await openMuseum(page);
+
+    const selector = page.locator("[data-atlas-museum-selector]");
+    const trigger = page.locator("[data-atlas-museum-background-trigger]");
+    const popover = page.locator("[data-atlas-museum-background-popover]");
+    await trigger.click();
+    await expect(popover).toBeVisible();
+
+    const hiddenState = await page.evaluate(() => new Promise(resolve => {
+        const event = new Event("touchmove", { bubbles: true });
+        window.dispatchEvent(event);
+        requestAnimationFrame(() => {
+            const selector = document.querySelector("[data-atlas-museum-selector]");
+            resolve({
+                opacity: selector?.style.opacity,
+                pointerEvents: selector?.style.pointerEvents,
+            });
+        });
+    }));
+
+    await expect(popover).toHaveCount(0);
+    expect(hiddenState).toEqual({ opacity: "0", pointerEvents: "none" });
+    await expect.poll(() => selector.evaluate(element =>
+        getComputedStyle(element).opacity
+    ), { timeout: 2_000 }).toBe("1");
+});
+
+test("outside interaction closes the popover without blocking BeerCoverV2", async ({ page }) => {
+    await openMuseum(page);
+
+    const popover = page.locator("[data-atlas-museum-background-popover]");
+    await page.locator("[data-atlas-museum-background-trigger]").click();
+    await expect(popover).toBeVisible();
+
+    await page.locator('[data-atlas-museum-card-id="museum-1"]').click();
+
+    await expect(popover).toHaveCount(0);
+    await expect(page.locator("[data-atlas-museum-artwork-overlay]")).toBeVisible();
 });
