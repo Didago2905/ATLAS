@@ -1,0 +1,115 @@
+.home-catalog-icon {
+    display: block;
+    width: 156.8px;
+    max-width: 100%;
+    height: auto;
+    margin: 20px auto 0;
+}
+
+.home-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 4px 20px 8px;
+}
+
+.home-controls__museum,
+.home-controls__order {
+    box-sizing: border-box;
+    min-height: 44px;
+    border: 1px solid #414141;
+    border-radius: 6px;
+    background: #171717;
+    color: #fff;
+    font: 500 14px/1.25 Arial, sans-serif;
+}
+
+.home-controls__museum {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--tap-list-focus, #fff);
+    font-size: 12px;
+    transition: none;
+}
+
+.home-controls__museum img {
+    display: block;
+    width: 76px;
+    height: auto;
+    margin: -6px;
+    transform: scale(1.176);
+}
+
+.home-controls__order {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    margin-left: auto;
+    gap: 2px;
+    min-width: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--tap-list-focus, #fff);
+    font-size: 12px;
+}
+
+.home-controls__order img {
+    display: block;
+    width: 76px;
+    height: 76px;
+    object-fit: contain;
+    margin: -6px;
+    transform: scale(1.176);
+    pointer-events: none;
+}
+
+.home-controls__order::after {
+    content: "";
+    height: 15px;
+}
+
+.home-controls__order select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    font: inherit;
+    cursor: pointer;
+}
+
+.home-controls__order option {
+    background: #171717;
+    color: #fff;
+}
+
+.home-controls__museum:focus-visible {
+    outline: 2px solid var(--tap-list-focus, #fff);
+    outline-offset: 3px;
+}
+
+.home-controls__order select:focus {
+    outline: none;
+}
+
+.home-controls__museum:hover,
+.home-controls__order:hover {
+    opacity: 0.85;
+}
+
+.home-controls__museum:active,
+.home-controls__order:active {
+    opacity: 0.65;
+}

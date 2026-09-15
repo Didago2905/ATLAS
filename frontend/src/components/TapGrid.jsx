@@ -327,7 +327,7 @@ export default function TapGrid({ sort }) {
                                         display: "flex",
                                         flexDirection: "column",
                                         justifyContent: "flex-end",
-                                        background: "#111",
+                                        background: beer.image_url ? "transparent" : "var(--taplist-background, #111)",
                                         boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
                                         transition: "transform 0.2s ease",
                                         animation: shouldShakeFeatured(beer)
@@ -381,7 +381,8 @@ export default function TapGrid({ sort }) {
                                                 left: 0,
                                                 width: "100%",
                                                 height: "100%",
-                                                objectFit: "contain",
+                                                objectFit: "cover",
+                                                objectPosition: "center 15%",
                                                 opacity: 0,
                                                 transition: "opacity 0.4s ease",
                                             }}

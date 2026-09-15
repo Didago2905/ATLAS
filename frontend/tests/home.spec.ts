@@ -28,13 +28,23 @@ async function cardIds(page: Page) {
 
 test("Home navigates to Museum", async ({ page }) => {
     await openHome(page);
-    await page.getByRole("button", { name: /Explorar modo museo/ }).click();
+    await expect(page.getByText("Explorar modo museo", { exact: false })).toHaveCount(0);
+    await page.getByRole("button", { name: "Museo", exact: true }).click();
     await expect(page).toHaveURL(/\/museum$/);
+});
+
+test("Home presents Tiburón Tap List branding and TapGrid", async ({ page }) => {
+    await openHome(page);
+    await expect(page.getByRole("heading", { name: "TIBURÓN TAP LIST" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ATLAS", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Taproom Manager", { exact: true })).toHaveCount(0);
+    await expect(grid(page)).toBeVisible();
 });
 
 test("sort exposes canonical values, orders cards, and persists tapFilter", async ({ page }) => {
     await openHome(page);
-    const sort = page.locator("select");
+    const sort = page.getByRole("combobox", { name: "Orden" });
+    await expect(sort.locator("option")).toHaveText(["Tap", "Alcohol", "Nombre", "Estilo"]);
 
     await expect.poll(() => sort.locator("option").evaluateAll(options =>
         options.map(option => (option as HTMLOptionElement).value)
@@ -143,4 +153,78 @@ test("featured marker does not intercept normal BeerDetail activation", async ({
     await featured.click();
 
     await expect(page).toHaveURL(/\/beer\/3$/);
+});
+
+
+test("Tap List settings open and dismiss accessibly", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => localStorage.setItem("atlas_museum_background", "burgundy"));
+    await openHome(page);
+    const trigger = page.getByRole("button", { name: "Configuración de Tap List" });
+    const panel = page.getByRole("region", { name: "Apariencia" });
+    const layout = page.locator(".tap-list-layout");
+    await expect(layout).toHaveAttribute("data-taplist-background", "black");
+    await trigger.click();
+    await expect(panel).toBeVisible();
+    await trigger.click();
+    await expect(panel).toHaveCount(0);
+    await trigger.click();
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await page.getByRole("heading", { name: "TIBURÓN TAP LIST" }).click();
+    await expect(panel).toHaveCount(0);
+});
+
+for (const [id, label, center] of [
+        ["black", "Negro", ""],
+        ["petrol", "Petróleo", "52, 70, 77"],
+        ["burgundy", "Borgoña", "89, 48, 57"],
+        ["gallery-light", "Galería clara", "240, 237, 230"],
+    ]) {
+    test(`Tap List applies ${id}`, async ({ page }) => {
+        await openHome(page);
+        const trigger = page.getByRole("button", { name: "Configuración de Tap List" });
+        const panel = page.getByRole("region", { name: "Apariencia" });
+        const layout = page.locator(".tap-list-layout");
+        await trigger.click();
+        await panel.getByRole("button", { name: label, exact: true }).click();
+        await expect(panel).toHaveCount(0);
+        await expect(layout).toHaveAttribute("data-taplist-background", id);
+        if (id === "black") await expect(layout).toHaveCSS("background-color", "rgb(0, 0, 0)");
+        else expect(await layout.evaluate(el => getComputedStyle(el).backgroundImage)).toContain(center);
+        expect(await page.evaluate(() => localStorage.getItem("atlas_taplist_background"))).toBe(id);
+    });
+}
+
+test("Tap List selection survives reload independently from Museum", async ({ page }) => {
+    await openHome(page);
+    await page.evaluate(() => localStorage.setItem("atlas_museum_background", "burgundy"));
+    const trigger = page.getByRole("button", { name: "Configuración de Tap List" });
+    const panel = page.getByRole("region", { name: "Apariencia" });
+    const layout = page.locator(".tap-list-layout");
+    await trigger.click();
+    await panel.getByRole("button", { name: "Galería clara" }).click();
+    await page.reload();
+    await expect(layout).toHaveAttribute("data-taplist-background", "gallery-light");
+    await expect(page.locator(".tap-list-header")).toHaveCSS("color", "rgb(34, 34, 34)");
+    await trigger.click();
+    await expect(panel.getByRole("button", { name: "Galería clara" })).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Museo", exact: true }).click();
+    await expect(page).toHaveURL(/\/museum$/);
+    expect(await page.evaluate(() => localStorage.getItem("atlas_museum_background"))).toBe("burgundy");
+
+    expect(await page.evaluate(() => localStorage.getItem("atlas_taplist_background"))).toBe("gallery-light");
+});
+
+test("Tap List rejects corrupt background without reading Museum preference", async ({ page }) => {
+    await page.addInitScript(() => {
+        localStorage.setItem("atlas_taplist_background", "{broken");
+        localStorage.setItem("atlas_museum_background", "petrol");
+    });
+    await openHome(page);
+    await expect(page.locator(".tap-list-layout")).toHaveAttribute("data-taplist-background", "black");
+    await expect(page.locator(".tap-list-layout")).toHaveCSS("background-color", "rgb(0, 0, 0)");
 });

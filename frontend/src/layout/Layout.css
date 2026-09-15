@@ -1,0 +1,86 @@
+.tap-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: calc(4px + env(safe-area-inset-top, 0px))
+        max(20px, env(safe-area-inset-right, 0px))
+        4px max(20px, env(safe-area-inset-left, 0px));
+}
+
+.tap-list-layout {
+    min-height: var(--atlas-vh, 100vh);
+    display: flow-root;
+}
+
+.tap-list-header { color: #fff; }
+.tap-list-layout[data-taplist-background="gallery-light"] .tap-list-header { color: #222; }
+.tap-list-layout[data-taplist-background="gallery-light"] .home-controls { --tap-list-focus: #222; }
+
+.tap-list-settings { position: relative; margin-left: auto; }
+.tap-list-settings__trigger {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 23px;
+    transition: none;
+}
+.tap-list-settings__trigger:hover { border-color: currentColor; }
+.tap-list-settings__trigger:active { background: #8883; }
+.tap-list-settings__trigger:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.tap-list-settings__panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 100;
+    padding: 12px;
+    border: 1px solid #666;
+    border-radius: 8px;
+    background: #171717;
+    color: #fff;
+}
+.tap-list-settings__panel h2 { margin: 0 0 8px; font-size: 14px; font-weight: 500; }
+.tap-list-settings__swatches { display: flex; gap: 4px; }
+.tap-list-settings__swatches button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 5px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    background: transparent;
+    transition: none;
+}
+.tap-list-settings__swatches button[aria-pressed="true"] { border-color: #fff; }
+.tap-list-settings__swatches button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.tap-list-settings__swatches button:active { background: #555; }
+.tap-list-settings__swatches span { width: 28px; height: 28px; border: 1px solid #888; border-radius: 50%; }
+
+.tap-list-branding {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.tap-list-branding__name {
+    font-weight: 900;
+    letter-spacing: 0.04em;
+}
+
+.tap-list-branding__label {
+    border-left: 1px solid currentColor;
+    padding: 4px 0 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    white-space: nowrap;
+}

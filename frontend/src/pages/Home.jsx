@@ -2,6 +2,10 @@ import { useState } from "react";
 import Layout from "../layout/Layout";
 import TapGrid from "../components/TapGrid";
 import { useNavigate } from "react-router-dom";
+import museumIcon from "../assets/icons/museum-leviathan-icon-final.png";
+import tapListIcon from "../assets/icons/tap-list-icon-transparent.png";
+import sortIcon from "../assets/icons/sort-imperial-transparent.png";
+import "./Home.css";
 
 export default function Home() {
 
@@ -22,45 +26,33 @@ export default function Home() {
     return (
         <Layout>
 
-            {/* 🏛 MUSEO */}
-            <div style={{ marginBottom: "12px" }}>
+            <div className="home-controls">
                 <button
+                    type="button"
+                    className="home-controls__museum"
+                    aria-label="Museo"
                     onClick={() => navigate("/museum")}
-                    style={{
-                        width: "100%",
-                        padding: "12px",
-                        borderRadius: "10px",
-                        background: "#111",
-                        color: "#fff",
-                        border: "1px solid #333",
-                        cursor: "pointer",
-                        fontSize: "14px",
-                        opacity: 0.85
-                    }}
                 >
-                    🏛 Explorar modo museo
+                    <img src={museumIcon} alt="" />
+                    <span aria-hidden="true" style={{ height: "15px" }} />
                 </button>
+
+                <label className="home-controls__order">
+                    <img src={sortIcon} alt="" />
+                    <select
+                        aria-label="Orden"
+                        value={sort}
+                        onChange={(e) => setSort(e.target.value)}
+                    >
+                        <option value="tap">Tap</option>
+                        <option value="abv">Alcohol</option>
+                        <option value="name">Nombre</option>
+                        <option value="style">Estilo</option>
+                    </select>
+                </label>
             </div>
 
-            {/* 🎛️ CONTROL SIMPLE */}
-            <div style={{ marginBottom: "20px" }}>
-                <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value)}
-                    style={{
-                        padding: "10px",
-                        borderRadius: "8px",
-                        background: "#111",
-                        color: "#fff",
-                        border: "1px solid #333"
-                    }}
-                >
-                    <option value="tap">Orden del Tap</option>
-                    <option value="abv">Alcohol</option>
-                    <option value="name">Nombre</option>
-                    <option value="style">Estilo</option>
-                </select>
-            </div>
+            <img className="home-catalog-icon" src={tapListIcon} alt="Tap List" />
 
             {/* 🍺 TAP GRID */}
             <TapGrid sort={sort} />
