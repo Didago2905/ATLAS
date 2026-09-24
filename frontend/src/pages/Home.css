@@ -3,7 +3,33 @@
     width: 156.8px;
     max-width: 100%;
     height: auto;
+    margin: 0;
+    transform: scale(1.15);
+}
+
+.home-settings-anchor {
+    position: relative;
+    width: 156.8px;
+    max-width: 100%;
     margin: 20px auto 0;
+}
+
+.home-settings-trigger {
+    display: block;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    line-height: 0;
+    transition: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.home-settings-trigger:focus,
+.home-settings-trigger:focus-visible {
+    outline: none;
 }
 
 .home-controls {
@@ -45,7 +71,7 @@
     width: 76px;
     height: auto;
     margin: -6px;
-    transform: scale(1.176);
+    transform: scale(1.3524);
 }
 
 .home-controls__order {
@@ -69,7 +95,7 @@
     height: 76px;
     object-fit: contain;
     margin: -6px;
-    transform: scale(1.176);
+    transform: scale(1.3524);
     pointer-events: none;
 }
 
@@ -95,9 +121,9 @@
     color: #fff;
 }
 
+.home-controls__museum:focus,
 .home-controls__museum:focus-visible {
-    outline: 2px solid var(--tap-list-focus, #fff);
-    outline-offset: 3px;
+    outline: none;
 }
 
 .home-controls__order select:focus {
@@ -112,4 +138,22 @@
 .home-controls__museum:active,
 .home-controls__order:active {
     opacity: 0.65;
+}
+
+[data-home-artwork],
+[data-home-artwork] img,
+[data-home-artwork] select {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.home-artwork-peek-image {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100dvh - 40px);
+    object-fit: contain;
+    pointer-events: none;
 }

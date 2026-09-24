@@ -21,6 +21,44 @@ export const TAP_BACKGROUNDS = Object.freeze([
     }),
 ]);
 
+export const BACKGROUND_STORAGE_KEY = "atlas_background";
+export const DEFAULT_BACKGROUND_ID = "burgundy";
+
+const BACKGROUND_ALIASES = Object.freeze({
+    bone: "gallery-light",
+    "dark-gradient": "petrol",
+    "sand-gradient": "burgundy",
+});
+
+function findBackground(id) {
+    const canonicalId = Object.hasOwn(BACKGROUND_ALIASES, id) ? BACKGROUND_ALIASES[id] : id;
+    return TAP_BACKGROUNDS.find(background => background.id === canonicalId);
+}
+
 export function resolveTapBackground(id) {
-    return TAP_BACKGROUNDS.find(background => background.id === id) || TAP_BACKGROUNDS[0];
+    return findBackground(id) || findBackground(DEFAULT_BACKGROUND_ID);
+}
+
+export function writeBackgroundPreference(id) {
+    const background = resolveTapBackground(id);
+    try {
+        localStorage.setItem(BACKGROUND_STORAGE_KEY, background.id);
+    } catch {
+        // Storage may be unavailable; the caller can still use the resolved preset.
+    }
+    return background;
+}
+
+export function readBackgroundPreference() {
+    for (const key of [BACKGROUND_STORAGE_KEY, "atlas_taplist_background", "atlas_museum_background"]) {
+        let id;
+        try {
+            id = localStorage.getItem(key);
+        } catch {
+            continue;
+        }
+        const background = findBackground(id);
+        if (background) return writeBackgroundPreference(background.id);
+    }
+    return writeBackgroundPreference(DEFAULT_BACKGROUND_ID);
 }

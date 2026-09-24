@@ -1,6 +1,19 @@
 import { formatABV } from "../utils/formatters";
 import { resolveColor, colorLabelMap } from "../utils/colorUtils";
 import { useState, useRef, useEffect } from "react";
+import tasterGlass from "../assets/glassware/taster-120ml.png";
+import smallPintGlass from "../assets/glassware/pint-small-330ml.png";
+import largePintGlass from "../assets/glassware/pint-large-500ml.png";
+import smallPitcherGlass from "../assets/glassware/pitcher-small-1l.png";
+import largePitcherGlass from "../assets/glassware/pitcher-large-1-9l.png";
+
+const GLASSWARE = {
+    taster: { src: tasterGlass, label: "Taster", size: 56 },
+    pinta_chica: { src: smallPintGlass, label: "Pinta chica", size: 60 },
+    pinta_grande: { src: largePintGlass, label: "Pinta grande", size: 64 },
+    jarra_chica: { src: smallPitcherGlass, label: "Jarra chica", size: 66 },
+    jarra_grande: { src: largePitcherGlass, label: "Jarra grande", size: 70 },
+};
 
 // Session-scoped registry of background URLs that have already completed loading.
 const loadedBackgroundUrls = new Set();
@@ -448,17 +461,59 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
                     marginTop: "14px",
                     display: "flex",
                     flexDirection: "column",
-                    gap: "6px",
+                    gap: "0px",
+                    paddingRight: "70px", // Keep prices clear of the absolute brewery logo.
                     zIndex: 1,
                     ...debugOutline("rgba(82, 196, 26, 0.95)"),
                 }}
             >
                 {beer.prices ? (
-                    Object.entries(beer.prices).map(([size, price]) => (
-                        <p key={size} style={{ margin: 0 }}>
-                            {size.replace("_", " ")}: ${price}
-                        </p>
-                    ))
+                    Object.entries(beer.prices).map(([size, price]) => {
+                        const glass = Object.hasOwn(GLASSWARE, size) ? GLASSWARE[size] : null;
+                        if (!glass) {
+                            return (
+                                <p key={size} style={{ margin: 0 }}>
+                                    {size.replace("_", " ")}: ${price}
+                                </p>
+                            );
+                        }
+                        return (
+                            <div key={size} style={{
+                                display: "grid",
+                                width: "210px",
+                                maxWidth: "100%",
+                                alignSelf: "center",
+                                gridTemplateColumns: "minmax(0, 1fr) 70px 42px",
+                                alignItems: "center",
+                                columnGap: "4px",
+                                height: "58px",
+                                fontSize: "14px",
+                                lineHeight: 1.2,
+                            }}>
+                                <span style={{ textAlign: "left" }}>{glass.label}</span>
+                                <span style={{ position: "relative", width: "70px", height: "58px" }}>
+                                    <img
+                                        src={glass.src}
+                                        alt=""
+                                        aria-hidden="true"
+                                        draggable={false}
+                                        style={{
+                                            display: "block",
+                                            position: "absolute",
+                                            left: "50%",
+                                            top: "50%",
+                                            transform: "translate(-50%, -50%)",
+                                            width: glass.size,
+                                            height: glass.size,
+                                            objectFit: "contain",
+                                            pointerEvents: "none",
+                                        }}
+                                    />
+                                </span>
+                                <span style={{ whiteSpace: "nowrap", textAlign: "right" }}>${price}</span>
+                            </div>
+                        );
+                    })
                 ) : (
                     <p style={{ margin: 0 }}>No prices</p>
                 )}

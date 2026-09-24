@@ -4,6 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { audit } from "../utils/audit";
 import { createTapTimingLab } from "../diagnostics/tapTimingLab";
 import TapTimingLabPanel from "../diagnostics/TapTimingLabPanel";
+import BeerPeek from "./BeerPeek";
+
+const PEEK_HOLD_MS = 500;
+const PEEK_MOVE_PX = 10;
 
 export default function TapGrid({ sort }) {
     const { beers } = useCatalogSession();
@@ -12,6 +16,80 @@ export default function TapGrid({ sort }) {
     const [exiting, setExiting] = useState(false);
     const multitouchGuardRef = useRef(false);
     const multitouchGuardTimerRef = useRef(null);
+    const [peekBeer, setPeekBeer] = useState(null);
+    const holdRef = useRef(null);
+    const suppressHoldClickRef = useRef(false);
+
+    const cancelHold = () => {
+        window.clearTimeout(holdRef.current?.timer);
+        holdRef.current = null;
+    };
+
+    const startHold = (event, beer) => {
+        cancelHold();
+        if (event.touches.length !== 1 || multitouchGuardRef.current || peekBeer || exiting) return;
+        const touch = event.touches[0];
+        const candidate = { identifier: touch.identifier, x: touch.clientX, y: touch.clientY };
+        candidate.timer = window.setTimeout(() => {
+            if (holdRef.current !== candidate || multitouchGuardRef.current) return;
+            holdRef.current = null;
+            suppressHoldClickRef.current = true;
+            setPeekBeer(beer);
+        }, PEEK_HOLD_MS);
+        holdRef.current = candidate;
+    };
+
+    // Independent observer: leave the existing two-finger recognizer untouched.
+    useEffect(() => {
+        let activeTouches = 0;
+        const onStart = (event) => {
+            // Only a fresh contact can unlock clicks; releasing the hold cannot.
+            if (activeTouches === 0) suppressHoldClickRef.current = false;
+            activeTouches = event.touches.length;
+            if (activeTouches > 1) cancelHold();
+        };
+        const onMove = (event) => {
+            const candidate = holdRef.current;
+            if (!candidate) return;
+            const touch = Array.from(event.touches).find(item => item.identifier === candidate.identifier);
+            if (event.touches.length !== 1 || !touch
+                || Math.hypot(touch.clientX - candidate.x, touch.clientY - candidate.y) >= PEEK_MOVE_PX) {
+                cancelHold();
+            }
+        };
+        const onEnd = (event) => {
+            activeTouches = event.touches.length;
+            cancelHold();
+        };
+        const onPointerDown = (event) => {
+            if (event.pointerType === "mouse" && activeTouches === 0) {
+                suppressHoldClickRef.current = false;
+            }
+        };
+        const onClick = (event) => {
+            if (!suppressHoldClickRef.current) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        };
+        const passiveCapture = { passive: true, capture: true };
+        window.addEventListener("touchstart", onStart, passiveCapture);
+        window.addEventListener("touchmove", onMove, passiveCapture);
+        window.addEventListener("touchend", onEnd, passiveCapture);
+        window.addEventListener("touchcancel", onEnd, passiveCapture);
+        window.addEventListener("scroll", cancelHold, passiveCapture);
+        window.addEventListener("pointerdown", onPointerDown, passiveCapture);
+        window.addEventListener("click", onClick, true);
+        return () => {
+            cancelHold();
+            window.removeEventListener("touchstart", onStart, true);
+            window.removeEventListener("touchmove", onMove, true);
+            window.removeEventListener("touchend", onEnd, true);
+            window.removeEventListener("touchcancel", onEnd, true);
+            window.removeEventListener("scroll", cancelHold, true);
+            window.removeEventListener("pointerdown", onPointerDown, true);
+            window.removeEventListener("click", onClick, true);
+        };
+    }, []);
 
     const [mobileGridMode, setMobileGridMode] = useState(() => {
         return localStorage.getItem("tap_grid_mode") || "focus";
@@ -287,7 +365,16 @@ export default function TapGrid({ sort }) {
                                 <div
                                     key={`${beer.id}-${index}`}
                                     data-atlas-tap-card={beer.id}
+                                    onTouchStart={(event) => startHold(event, beer)}
+                                    onContextMenu={(event) => event.preventDefault()}
+                                    onDragStart={(event) => event.preventDefault()}
                                     onClick={(event) => {
+
+                                        if (suppressHoldClickRef.current || peekBeer) {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            return;
+                                        }
 
                                         if (multitouchGuardRef.current) {
                                             event.preventDefault();
@@ -324,6 +411,9 @@ export default function TapGrid({ sort }) {
                                         borderRadius: "12px",
                                         overflow: "hidden",
                                         cursor: "pointer",
+                                        userSelect: "none",
+                                        WebkitUserSelect: "none",
+                                        WebkitTouchCallout: "none",
                                         display: "flex",
                                         flexDirection: "column",
                                         justifyContent: "flex-end",
@@ -375,6 +465,7 @@ export default function TapGrid({ sort }) {
                                             src={beer.image_url}
                                             alt={beer.name}
                                             loading="lazy"
+                                            draggable={false}
                                             style={{
                                                 position: "absolute",
                                                 top: 0,
@@ -417,6 +508,7 @@ export default function TapGrid({ sort }) {
 
             </div>
 
+            {peekBeer && <BeerPeek beer={peekBeer} onClose={() => setPeekBeer(null)} />}
         </>
     );
 }

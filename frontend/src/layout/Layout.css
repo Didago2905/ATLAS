@@ -1,4 +1,6 @@
 .tap-list-header {
+    min-height: 44px;
+    box-sizing: content-box;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -18,49 +20,42 @@
 .tap-list-layout[data-taplist-background="gallery-light"] .tap-list-header { color: #222; }
 .tap-list-layout[data-taplist-background="gallery-light"] .home-controls { --tap-list-focus: #222; }
 
-.tap-list-settings { position: relative; margin-left: auto; }
-.tap-list-settings__trigger {
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    background: transparent;
-    color: inherit;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    font-size: 23px;
-    transition: none;
-}
-.tap-list-settings__trigger:hover { border-color: currentColor; }
-.tap-list-settings__trigger:active { background: #8883; }
-.tap-list-settings__trigger:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .tap-list-settings__panel {
     position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
+    bottom: calc(107.5% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    box-sizing: border-box;
     z-index: 100;
-    padding: 12px;
+    padding: 10px;
     border: 1px solid #666;
     border-radius: 8px;
     background: #171717;
     color: #fff;
+    -webkit-tap-highlight-color: transparent;
 }
-.tap-list-settings__panel h2 { margin: 0 0 8px; font-size: 14px; font-weight: 500; }
-.tap-list-settings__swatches { display: flex; gap: 4px; }
+.tap-list-settings__panel h2 { margin: 0 0 7px; font-size: 12px; font-weight: 500; }
+.tap-list-settings__swatches { display: flex; flex-wrap: wrap; gap: 3px; }
 .tap-list-settings__swatches button {
     display: grid;
     place-items: center;
-    width: 44px;
-    height: 44px;
-    padding: 5px;
+    width: 38px;
+    height: 38px;
+    padding: 4px;
     border: 2px solid transparent;
     border-radius: 50%;
     background: transparent;
     transition: none;
 }
 .tap-list-settings__swatches button[aria-pressed="true"] { border-color: #fff; }
-.tap-list-settings__swatches button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.tap-list-settings__panel:focus,
+.tap-list-settings__panel:focus-visible,
+.tap-list-settings__swatches button:focus,
+.tap-list-settings__swatches button:focus-visible { outline: none; }
 .tap-list-settings__swatches button:active { background: #555; }
-.tap-list-settings__swatches span { width: 28px; height: 28px; border: 1px solid #888; border-radius: 50%; }
+.tap-list-settings__swatches span { width: 24px; height: 24px; border: 1px solid #888; border-radius: 50%; }
 
 .tap-list-branding {
     display: flex;

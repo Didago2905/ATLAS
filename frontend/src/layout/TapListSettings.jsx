@@ -1,22 +1,20 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { TAP_BACKGROUNDS } from "../backgrounds";
 
-export default function TapListSettings({ background, onSelect }) {
-    const [open, setOpen] = useState(false);
-    const controlRef = useRef(null);
-    const triggerRef = useRef(null);
-    const panelId = useId();
+export default function TapListSettings({ background, onSelect, open, onOpenChange, triggerRef, panelId }) {
+    const panelRef = useRef(null);
 
     useEffect(() => {
         if (!open) return;
-        controlRef.current.querySelector('[aria-pressed="true"]')?.focus();
+        panelRef.current.querySelector('[aria-pressed="true"]')?.focus({ preventScroll: true });
         function onPointerDown(event) {
-            if (!controlRef.current?.contains(event.target)) setOpen(false);
+            if (!panelRef.current?.contains(event.target)
+                && !triggerRef.current?.contains(event.target)) onOpenChange(false);
         }
         function onKeyDown(event) {
             if (event.key === "Escape") {
-                setOpen(false);
-                triggerRef.current?.focus();
+                onOpenChange(false);
+                triggerRef.current?.focus({ preventScroll: true });
             }
         }
         document.addEventListener("pointerdown", onPointerDown);
@@ -25,38 +23,32 @@ export default function TapListSettings({ background, onSelect }) {
             document.removeEventListener("pointerdown", onPointerDown);
             document.removeEventListener("keydown", onKeyDown);
         };
-    }, [open]);
+    }, [open, onOpenChange, triggerRef]);
+
+    if (!open) return null;
 
     return (
-        <div className="tap-list-settings" ref={controlRef}
+        <section id={panelId} className="tap-list-settings__panel" aria-label="Apariencia"
+            ref={panelRef}
             onBlur={event => {
-                if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+                if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)
+                    && !triggerRef.current?.contains(event.relatedTarget)) onOpenChange(false);
             }}>
-            <button type="button" className="tap-list-settings__trigger"
-                ref={triggerRef} aria-label="Configuración de Tap List"
-                aria-expanded={open} aria-controls={open ? panelId : undefined}
-                onClick={() => setOpen(value => !value)}>
-                <span aria-hidden="true">⚙</span>
-            </button>
-            {open && (
-                <section id={panelId} className="tap-list-settings__panel" aria-label="Apariencia">
-                    <h2>Apariencia</h2>
-                    <div className="tap-list-settings__swatches">
-                        {TAP_BACKGROUNDS.map(preset => (
-                            <button key={preset.id} type="button"
-                                aria-label={preset.label} title={preset.label}
-                                aria-pressed={background.id === preset.id}
-                                onClick={() => {
-                                    onSelect(preset);
-                                    setOpen(false);
-                                    triggerRef.current?.focus();
-                                }}>
-                                <span style={{ background: preset.value }} />
-                            </button>
-                        ))}
-                    </div>
-                </section>
-            )}
-        </div>
+            <h2>Apariencia</h2>
+            <div className="tap-list-settings__swatches">
+                {TAP_BACKGROUNDS.map(preset => (
+                    <button key={preset.id} type="button"
+                        aria-label={preset.label} title={preset.label}
+                        aria-pressed={background.id === preset.id}
+                        onClick={() => {
+                            onSelect(preset);
+                            onOpenChange(false);
+                            triggerRef.current?.focus({ preventScroll: true });
+                        }}>
+                        <span style={{ background: preset.value }} />
+                    </button>
+                ))}
+            </div>
+        </section>
     );
 }
