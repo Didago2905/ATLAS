@@ -1,3 +1,4 @@
+import PeekOverlay from "./PeekOverlay";
 import { formatABV } from "../utils/formatters";
 import { resolveColor, colorLabelMap } from "../utils/colorUtils";
 import { useState, useRef, useEffect } from "react";
@@ -8,11 +9,11 @@ import smallPitcherGlass from "../assets/glassware/pitcher-small-1l.png";
 import largePitcherGlass from "../assets/glassware/pitcher-large-1-9l.png";
 
 const GLASSWARE = {
-    taster: { src: tasterGlass, label: "Taster", size: 56 },
-    pinta_chica: { src: smallPintGlass, label: "Pinta chica", size: 60 },
-    pinta_grande: { src: largePintGlass, label: "Pinta grande", size: 64 },
-    jarra_chica: { src: smallPitcherGlass, label: "Jarra chica", size: 66 },
-    jarra_grande: { src: largePitcherGlass, label: "Jarra grande", size: 70 },
+    taster: { src: tasterGlass, label: "Taster", capacity: "120 ML", size: 56, peekInset: "13% 16% 13% 16%" },
+    pinta_chica: { src: smallPintGlass, label: "Pinta chica", capacity: "330 ML", size: 60, peekInset: "0% 19% 2% 19%" },
+    pinta_grande: { src: largePintGlass, label: "Pinta grande", capacity: "500 ML", size: 64, peekInset: "4% 21% 4% 21%" },
+    jarra_chica: { src: smallPitcherGlass, label: "Jarra chica", capacity: "1 L", size: 66, peekInset: "1% 4% 0% 11%" },
+    jarra_grande: { src: largePitcherGlass, label: "Jarra grande", capacity: "1.9 L", size: 70, peekInset: "0% 0% 0% 10%" },
 };
 
 // Session-scoped registry of background URLs that have already completed loading.
@@ -58,6 +59,8 @@ const withAlpha = (hex, alpha) => {
 
 export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
 
+    const [peekAsset, setPeekAsset] = useState(null);
+    const glassPeekOpenRef = useRef(false);
     const [showBrewery, setShowBrewery] = useState(false);
 
     const [showArt, setShowArt] = useState(false);
@@ -71,6 +74,91 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
     const metadataRef = useRef(null);
     const descriptionRef = useRef(null);
     const pricesRef = useRef(null);
+
+    useEffect(() => {
+        let candidate = null;
+        let activeTouches = 0;
+        let suppressHoldClick = false;
+        const cancelHold = () => {
+            window.clearTimeout(candidate?.timer);
+            candidate = null;
+        };
+        const start = (event) => {
+            const freshContact = activeTouches === 0;
+            activeTouches = event.touches.length;
+            if (freshContact) suppressHoldClick = false;
+            cancelHold();
+            if (!freshContact || activeTouches !== 1 || glassPeekOpenRef.current) return;
+            const trigger = event.target.closest?.("[data-glassware]");
+            const key = trigger?.dataset.glassware;
+            const asset = pricesRef.current?.contains(trigger) && Object.hasOwn(GLASSWARE, key) ? GLASSWARE[key] : null;
+            if (!asset) return;
+            const touch = event.touches[0];
+            const pending = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
+            pending.timer = window.setTimeout(() => {
+                if (candidate !== pending) return;
+                candidate = null;
+                suppressHoldClick = true;
+                glassPeekOpenRef.current = true;
+                setPeekAsset(asset);
+            }, 500);
+            candidate = pending;
+        };
+        const move = (event) => {
+            if (suppressHoldClick) {
+                if (event.cancelable) event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+            if (!candidate) return;
+            const touch = Array.from(event.touches).find(item => item.identifier === candidate.id);
+            if (event.touches.length !== 1 || !touch
+                || Math.hypot(touch.clientX - candidate.x, touch.clientY - candidate.y) >= 10) {
+                cancelHold();
+            }
+        };
+        const end = (event) => {
+            activeTouches = event.touches.length;
+            cancelHold();
+            // Suppress activation only after a recognized hold.
+            if (suppressHoldClick) {
+                if (event.cancelable) event.preventDefault();
+                event.stopPropagation();
+            }
+        };
+        const cancel = (event) => {
+            activeTouches = event.touches.length;
+            cancelHold();
+            if (suppressHoldClick) event.stopPropagation();
+        };
+        const click = (event) => {
+            if (!suppressHoldClick) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        };
+        const pointerDown = (event) => {
+            if (event.pointerType === "mouse" && activeTouches === 0) suppressHoldClick = false;
+        };
+        const passiveCapture = { passive: true, capture: true };
+        // Capture observes second contacts anywhere, including outside the card.
+        window.addEventListener("touchstart", start, passiveCapture);
+        window.addEventListener("touchmove", move, { passive: false, capture: true });
+        window.addEventListener("touchend", end, { passive: false, capture: true });
+        window.addEventListener("touchcancel", cancel, passiveCapture);
+        window.addEventListener("scroll", cancelHold, passiveCapture);
+        window.addEventListener("click", click, true);
+        window.addEventListener("pointerdown", pointerDown, passiveCapture);
+        return () => {
+            cancelHold();
+            window.removeEventListener("touchstart", start, true);
+            window.removeEventListener("touchmove", move, true);
+            window.removeEventListener("touchend", end, true);
+            window.removeEventListener("touchcancel", cancel, true);
+            window.removeEventListener("scroll", cancelHold, true);
+            window.removeEventListener("click", click, true);
+            window.removeEventListener("pointerdown", pointerDown, true);
+        };
+    }, []);
 
     const debugOutline = (color) =>
         spatialDebug
@@ -295,6 +383,7 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
     );
 
     return (
+        <>
         <div
             ref={layoutRef}
             className="beer-card"
@@ -468,8 +557,10 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
                 }}
             >
                 {beer.prices ? (
-                    Object.entries(beer.prices).map(([size, price]) => {
+                    Object.entries(beer.prices).map(([size, price], index, entries) => {
                         const glass = Object.hasOwn(GLASSWARE, size) ? GLASSWARE[size] : null;
+                        const previousKey = entries[index - 1]?.[0];
+                        const previousGlass = Object.hasOwn(GLASSWARE, previousKey) ? GLASSWARE[previousKey] : null;
                         if (!glass) {
                             return (
                                 <p key={size} style={{ margin: 0 }}>
@@ -487,11 +578,38 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
                                 alignItems: "center",
                                 columnGap: "4px",
                                 height: "58px",
+                                // Preserve the first pair's spacing as the glass sizes increase.
+                                marginTop: previousGlass ? Math.max(0, (previousGlass.size + glass.size) / 2 - 58) : 0,
                                 fontSize: "14px",
                                 lineHeight: 1.2,
                             }}>
-                                <span style={{ textAlign: "left" }}>{glass.label}</span>
+                                <span style={{ justifySelf: size === "taster" ? "center" : "start", textAlign: "center", transform: size === "taster" ? "translateX(-9px)" : undefined }}>
+                                    <span style={{ display: "block" }}>{glass.label}</span>
+                                    <span style={{ display: "block", fontSize: "10px", opacity: 0.6, marginTop: "2px" }}>
+                                        {glass.capacity}
+                                    </span>
+                                </span>
                                 <span style={{ position: "relative", width: "70px", height: "58px" }}>
+                                    <span
+                                        data-glassware={size}
+                                        onTouchStart={(event) => {
+                                            // Keep the card's hold idle; two-finger gestures still bubble.
+                                            if (event.touches.length === 1) event.stopPropagation();
+                                        }}
+                                        onContextMenu={(event) => event.preventDefault()}
+                                        onDragStart={(event) => event.preventDefault()}
+                                        style={{
+                                            position: "absolute",
+                                            left: "50%",
+                                            top: "50%",
+                                            transform: "translate(-50%, -50%)",
+                                            width: glass.size * 0.5 + 4,
+                                            height: glass.size * 0.78 + 4,
+                                            userSelect: "none",
+                                            WebkitUserSelect: "none",
+                                            WebkitTouchCallout: "none",
+                                        }}
+                                    />
                                     <img
                                         src={glass.src}
                                         alt=""
@@ -507,6 +625,9 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
                                             height: glass.size,
                                             objectFit: "contain",
                                             pointerEvents: "none",
+                                            userSelect: "none",
+                                            WebkitUserSelect: "none",
+                                            WebkitTouchCallout: "none",
                                         }}
                                     />
                                 </span>
@@ -592,5 +713,67 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
             </div>
 
         </div>
+        {peekAsset && (
+            <div
+                onClick={(event) => event.stopPropagation()}
+                onTouchStart={(event) => event.stopPropagation()}
+                onTouchMove={(event) => event.stopPropagation()}
+                onTouchEnd={(event) => event.stopPropagation()}
+                onTouchCancel={(event) => event.stopPropagation()}
+            >
+            <PeekOverlay
+                label={peekAsset.label}
+                onClose={() => {
+                    glassPeekOpenRef.current = false;
+                    setPeekAsset(null);
+                }}
+                panelStyle={{ display: "flex", background: "transparent", cursor: "default", pointerEvents: "none" }}
+            >
+                {/* Ignore transparent PNG margins while keeping the image's rendered size. */}
+                <div style={{ position: "absolute", inset: peekAsset.peekInset, pointerEvents: "auto" }}>
+                <button
+                    type="button"
+                    aria-label="Cerrar cristalería"
+                    onClick={() => {
+                        glassPeekOpenRef.current = false;
+                        setPeekAsset(null);
+                    }}
+                    style={{
+                        position: "absolute",
+                        top: "-4px",
+                        left: "-4px",
+                        transform: "translate(-100%, -100%)",
+                        width: "48px",
+                        height: "48px",
+                        padding: 0,
+                        border: 0,
+                        background: "transparent",
+                        color: "rgba(255,255,255,0.95)",
+                        fontSize: "36px",
+                        lineHeight: 1,
+                        cursor: "pointer",
+                    }}
+                >
+                    ×
+                </button>
+                </div>
+                <img
+                    src={peekAsset.src}
+                    alt={peekAsset.label}
+                    draggable={false}
+                    style={{
+                        display: "block",
+                        width: "auto",
+                        height: "auto",
+                        maxWidth: "min(480px, calc(100vw - 40px))",
+                        maxHeight: "calc(100dvh - 40px)",
+                        objectFit: "contain",
+                        pointerEvents: "none",
+                    }}
+                />
+            </PeekOverlay>
+            </div>
+        )}
+        </>
     );
 }

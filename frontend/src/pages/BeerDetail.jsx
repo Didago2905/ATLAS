@@ -38,6 +38,7 @@ export default function BeerDetail() {
 
     const startX = useRef(0);
     const startY = useRef(0);
+    const activeTouchId = useRef(null);
     const axisLock = useRef(null);
     const multiTouchActive = useRef(false);
     const outerRef = useRef(null);
@@ -974,6 +975,7 @@ export default function BeerDetail() {
                     }
 
                     multiTouchActive.current = false;
+                    activeTouchId.current = e.touches[0].identifier;
                     startX.current = e.touches[0].clientX;
                     startY.current = e.touches[0].clientY;
                     axisLock.current = null;
@@ -992,6 +994,10 @@ export default function BeerDetail() {
                     });
                 }}
                 onTouchMove={(e) => {
+                    const touch = Array.from(e.changedTouches).find(
+                        item => item.identifier === activeTouchId.current
+                    );
+                    if (!touch) return;
                     if (e.touches.length > 1) {
                         if (!multiTouchActive.current) {
                             console.log("[gesture]", {
@@ -1010,8 +1016,8 @@ export default function BeerDetail() {
 
                     if (axisLock.current) return;
 
-                    const currentX = e.touches[0].clientX;
-                    const currentY = e.touches[0].clientY;
+                    const currentX = touch.clientX;
+                    const currentY = touch.clientY;
                     const deltaX = currentX - startX.current;
                     const deltaY = currentY - startY.current;
                     const absX = Math.abs(deltaX);
@@ -1039,8 +1045,16 @@ export default function BeerDetail() {
                     }
                 }}
                 onTouchEnd={(e) => {
+                    const touch = Array.from(e.changedTouches).find(
+                        item => item.identifier === activeTouchId.current
+                    );
                     if (multiTouchActive.current) {
                         axisLock.current = null;
+                        if (touch) {
+                            activeTouchId.current = null;
+                            startX.current = 0;
+                            startY.current = 0;
+                        }
 
                         console.log("[gesture]", {
                             type: "multiTouchEnd",
@@ -1054,10 +1068,14 @@ export default function BeerDetail() {
                         return;
                     }
 
-                    const endX = e.changedTouches[0].clientX;
-                    const endY = e.changedTouches[0].clientY;
+                    if (!touch) return;
+                    const endX = touch.clientX;
+                    const endY = touch.clientY;
                     const deltaX = endX - startX.current;
                     const deltaY = endY - startY.current;
+                    activeTouchId.current = null;
+                    startX.current = 0;
+                    startY.current = 0;
                     const absX = Math.abs(deltaX);
                     const absY = Math.abs(deltaY);
                     const ambiguityBuffer = 10;
@@ -1184,6 +1202,12 @@ export default function BeerDetail() {
                     axisLock.current = null;
                 }}
                 onTouchCancel={(e) => {
+                    if (!Array.from(e.changedTouches).some(
+                        item => item.identifier === activeTouchId.current
+                    )) return;
+                    activeTouchId.current = null;
+                    startX.current = 0;
+                    startY.current = 0;
                     axisLock.current = null;
                     multiTouchActive.current = false;
 
