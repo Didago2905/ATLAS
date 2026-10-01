@@ -4,7 +4,7 @@
     max-width: 100%;
     height: auto;
     margin: 0;
-    transform: scale(1.15);
+    transform: scale(1.20);
 }
 
 .home-settings-anchor {
@@ -71,7 +71,7 @@
     width: 76px;
     height: auto;
     margin: -6px;
-    transform: scale(1.3524);
+    transform: scale(1.393);
 }
 
 .home-controls__order {
@@ -146,6 +146,13 @@
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.home-artwork-peek-hitbox {
+    position: absolute;
+    inset: 12%;
+    pointer-events: auto;
 }
 
 .home-artwork-peek-image {

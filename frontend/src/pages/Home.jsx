@@ -10,8 +10,8 @@ import sortIcon from "../assets/icons/sort-imperial-transparent.png";
 import "./Home.css";
 
 const HOME_ARTWORK = {
-    museum: { src: museumIcon, label: "Museo" },
-    order: { src: sortIcon, label: "Orden" },
+    museum: { src: museumIcon, label: "Museo", compactHitbox: true },
+    order: { src: sortIcon, label: "Orden", compactHitbox: true },
     tapList: { src: tapListIcon, label: "Tap List" },
 };
 
@@ -191,8 +191,15 @@ export default function Home() {
                         artworkOpenRef.current = false;
                         setPeekAsset(null);
                     }}
-                    panelStyle={{ display: "flex", background: "transparent" }}
+                    panelStyle={{
+                        display: "flex",
+                        background: "transparent",
+                        pointerEvents: peekAsset.compactHitbox ? "none" : undefined,
+                    }}
                 >
+                    {peekAsset.compactHitbox && (
+                        <div className="home-artwork-peek-hitbox" />
+                    )}
                     <img
                         className="home-artwork-peek-image"
                         src={peekAsset.src}

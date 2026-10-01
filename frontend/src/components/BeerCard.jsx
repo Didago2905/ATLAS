@@ -13,7 +13,7 @@ const GLASSWARE = {
     pinta_chica: { src: smallPintGlass, label: "Pinta chica", capacity: "330 ML", size: 60, peekInset: "0% 19% 2% 19%" },
     pinta_grande: { src: largePintGlass, label: "Pinta grande", capacity: "500 ML", size: 64, peekInset: "4% 21% 4% 21%" },
     jarra_chica: { src: smallPitcherGlass, label: "Jarra chica", capacity: "1 L", size: 66, peekInset: "1% 4% 0% 11%" },
-    jarra_grande: { src: largePitcherGlass, label: "Jarra grande", capacity: "1.9 L", size: 70, peekInset: "0% 0% 0% 10%" },
+    jarra_grande: { src: largePitcherGlass, label: "Jarra grande", capacity: "1.7 L", size: 70, peekInset: "0% 0% 0% 10%" },
 };
 
 // Session-scoped registry of background URLs that have already completed loading.
