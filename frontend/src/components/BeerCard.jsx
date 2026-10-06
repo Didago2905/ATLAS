@@ -2,11 +2,11 @@ import PeekOverlay from "./PeekOverlay";
 import { formatABV } from "../utils/formatters";
 import { resolveColor, colorLabelMap } from "../utils/colorUtils";
 import { useState, useRef, useEffect } from "react";
-import tasterGlass from "../assets/glassware/taster-120ml.png";
-import smallPintGlass from "../assets/glassware/pint-small-330ml.png";
-import largePintGlass from "../assets/glassware/pint-large-500ml.png";
-import smallPitcherGlass from "../assets/glassware/pitcher-small-1l.png";
-import largePitcherGlass from "../assets/glassware/pitcher-large-1-9l.png";
+import tasterGlass from "../assets/glassware/taster-120ml.webp";
+import smallPintGlass from "../assets/glassware/pint-small-330ml.webp";
+import largePintGlass from "../assets/glassware/pint-large-500ml.webp";
+import smallPitcherGlass from "../assets/glassware/pitcher-small-1l.webp";
+import largePitcherGlass from "../assets/glassware/pitcher-large-1-9l.webp";
 
 const GLASSWARE = {
     taster: { src: tasterGlass, label: "Taster", capacity: "120 ML", size: 56, peekInset: "13% 16% 13% 16%" },
@@ -331,7 +331,7 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
         colorLabelMap[rawColor] || beer.color;
 
     const breweryLogos = {
-        tiburon: "/logos/tiburon.png",
+        tiburon: "/logos/tiburon.webp",
         invitada: "/logos/invitada.png",
         default: "/logos/default.png"
     };

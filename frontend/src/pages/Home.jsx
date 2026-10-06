@@ -3,11 +3,14 @@ import Layout from "../layout/Layout";
 import TapListSettings from "../layout/TapListSettings";
 import TapGrid from "../components/TapGrid";
 import PeekOverlay from "../components/PeekOverlay";
+import useCatalogSession from "../catalog/useCatalogSession";
 import { useNavigate } from "react-router-dom";
-import museumIcon from "../assets/icons/museum-leviathan-icon-final.png";
-import tapListIcon from "../assets/icons/tap-list-icon-transparent.png";
-import sortIcon from "../assets/icons/sort-imperial-transparent.png";
+import museumIcon from "../assets/icons/museum-leviathan-icon-final.webp";
+import tapListIcon from "../assets/icons/tap-list-icon-transparent.webp";
+import sortIcon from "../assets/icons/sort-imperial-transparent.webp";
 import "./Home.css";
+
+const tritonIntro = "/static/icons/tutorial/triton-intro-taplist.webp";
 
 const HOME_ARTWORK = {
     museum: { src: museumIcon, label: "Museo", compactHitbox: true },
@@ -23,6 +26,40 @@ export default function Home() {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const settingsTriggerRef = useRef(null);
     const settingsPanelId = useId();
+    const { beers } = useCatalogSession();
+    const [tutorialPending, setTutorialPending] = useState(() =>
+        new URLSearchParams(window.location.search).get("tutorial") === "1"
+    );
+    const tutorialActive = tutorialPending && beers.length > 0 && !peekAsset;
+    const [tritonReady, setTritonReady] = useState(false);
+
+    useEffect(() => {
+        if (!tutorialPending) return;
+        let cancelled = false;
+        const image = new Image();
+        const finish = () => {
+            if (!cancelled) setTritonReady(true);
+        };
+        image.onerror = finish;
+        image.onload = async () => {
+            try {
+                if (image.decode) await image.decode();
+            } catch {
+                // Fall back to the normal image rendering if preparation fails.
+            }
+            finish();
+        };
+        image.src = tritonIntro;
+        return () => {
+            cancelled = true;
+            image.onload = null;
+            image.onerror = null;
+        };
+    }, [tutorialPending]);
+
+    useEffect(() => {
+        if (tutorialActive) setSettingsOpen(false);
+    }, [tutorialActive]);
 
     useEffect(() => {
         let candidate = null;
@@ -116,7 +153,7 @@ export default function Home() {
         <Layout>
             {({ background, onSelectBackground }) => (
                 <>
-            <div className="home-controls">
+            <div className="home-controls" inert={tutorialActive ? "" : undefined}>
                 <button
                     type="button"
                     className="home-controls__museum"
@@ -150,7 +187,7 @@ export default function Home() {
                 </label>
             </div>
 
-            <div className="home-settings-anchor">
+            <div className="home-settings-anchor" inert={tutorialActive ? "" : undefined}>
                 <button
                     type="button"
                     className="home-settings-trigger"
@@ -173,7 +210,7 @@ export default function Home() {
                 <TapListSettings
                     background={background}
                     onSelect={onSelectBackground}
-                    open={settingsOpen}
+                    open={settingsOpen && !tutorialActive}
                     onOpenChange={setSettingsOpen}
                     triggerRef={settingsTriggerRef}
                     panelId={settingsPanelId}
@@ -181,7 +218,33 @@ export default function Home() {
             </div>
 
             {/* 🍺 TAP GRID */}
-            <TapGrid sort={sort} />
+            <div className={tutorialActive ? "home-tutorial-grid" : undefined}>
+                <TapGrid
+                    sort={sort}
+                    onCardAccepted={tutorialActive ? () => setTutorialPending(false) : undefined}
+                />
+            </div>
+
+            {tutorialActive && (
+                <>
+                    <div className="home-tutorial-shade" aria-hidden="true" />
+                    <aside className="home-tutorial-message" aria-live="polite">
+                        <img
+                            className="home-tutorial-triton"
+                            src={tritonIntro}
+                            style={{ visibility: tritonReady ? "visible" : "hidden" }}
+                            alt=""
+                            draggable={false}
+                        />
+                        <div className="home-tutorial-dialogue">
+                            <p className="home-tutorial-greeting"><strong>¡Bienvenido a Tiburón!</strong></p>
+                            <p>Aquí encontrarás lo que estamos sirviendo hoy.</p>
+                            <p><strong>¿Cuál se te antoja?</strong>{" "}
+                                Toca una cerveza para conocerla.</p>
+                        </div>
+                    </aside>
+                </>
+            )}
 
             {peekAsset && (
                 <PeekOverlay

@@ -1,3 +1,85 @@
+.home-tutorial-shade {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.72);
+}
+
+.home-tutorial-grid {
+    position: relative;
+    z-index: 201;
+}
+
+.home-tutorial-message {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    left: max(12px, env(safe-area-inset-left, 0px));
+    z-index: 202;
+    width: min(600px, calc(100% - 24px));
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    color: #fff;
+    font-size: 13px;
+    line-height: 1.35;
+    text-shadow: 0 1px 4px #000;
+    pointer-events: none;
+}
+
+.home-tutorial-message p {
+    margin: 0 0 8px;
+}
+
+.home-tutorial-triton {
+    flex: 0 0 auto;
+    display: block;
+    width: clamp(190px, 60vw, 280px);
+    height: auto;
+    margin-right: clamp(-84px, -18vw, -57px);
+    align-self: flex-start;
+    pointer-events: none;
+}
+
+.home-tutorial-dialogue {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    max-width: 320px;
+    box-sizing: border-box;
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: rgba(17, 17, 19, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.85);
+    pointer-events: none;
+}
+
+.home-tutorial-dialogue::before {
+    content: "";
+    position: absolute;
+    left: -6px;
+    top: 30px;
+    width: 10px;
+    height: 10px;
+    background: #111113;
+    border-left: 1px solid rgba(255, 255, 255, 0.18);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    transform: rotate(45deg);
+}
+
+.home-tutorial-dialogue p:last-child {
+    margin-bottom: 0;
+}
+
+.home-tutorial-dialogue strong {
+    color: #fff;
+}
+
+.home-tutorial-greeting {
+    font-size: 16px;
+}
+
 .home-catalog-icon {
     display: block;
     width: 156.8px;
