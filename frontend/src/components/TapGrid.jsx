@@ -9,7 +9,7 @@ import BeerPeek from "./BeerPeek";
 const PEEK_HOLD_MS = 500;
 const PEEK_MOVE_PX = 10;
 
-export default function TapGrid({ sort, onCardAccepted }) {
+export default function TapGrid({ sort, onCardAccepted, tutorialStep }) {
     const { beers } = useCatalogSession();
 
     const navigate = useNavigate();
@@ -400,7 +400,8 @@ export default function TapGrid({ sort, onCardAccepted }) {
                                             navigate(`/beer/${beer.id}`, {
                                                 state: {
                                                     beers: tapBeers,
-                                                    currentIndex: index
+                                                    currentIndex: index,
+                                                    ...(tutorialStep ? { tutorialStep } : {}),
                                                 }
                                             });
                                         }, 280);

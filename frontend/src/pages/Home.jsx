@@ -4,6 +4,7 @@ import TapListSettings from "../layout/TapListSettings";
 import TapGrid from "../components/TapGrid";
 import PeekOverlay from "../components/PeekOverlay";
 import useCatalogSession from "../catalog/useCatalogSession";
+import useTutorialImage from "../tutorial/useTutorialImage";
 import { useNavigate } from "react-router-dom";
 import museumIcon from "../assets/icons/museum-leviathan-icon-final.webp";
 import tapListIcon from "../assets/icons/tap-list-icon-transparent.webp";
@@ -31,31 +32,7 @@ export default function Home() {
         new URLSearchParams(window.location.search).get("tutorial") === "1"
     );
     const tutorialActive = tutorialPending && beers.length > 0 && !peekAsset;
-    const [tritonReady, setTritonReady] = useState(false);
-
-    useEffect(() => {
-        if (!tutorialPending) return;
-        let cancelled = false;
-        const image = new Image();
-        const finish = () => {
-            if (!cancelled) setTritonReady(true);
-        };
-        image.onerror = finish;
-        image.onload = async () => {
-            try {
-                if (image.decode) await image.decode();
-            } catch {
-                // Fall back to the normal image rendering if preparation fails.
-            }
-            finish();
-        };
-        image.src = tritonIntro;
-        return () => {
-            cancelled = true;
-            image.onload = null;
-            image.onerror = null;
-        };
-    }, [tutorialPending]);
+    const tritonReady = useTutorialImage(tritonIntro, tutorialPending);
 
     useEffect(() => {
         if (tutorialActive) setSettingsOpen(false);
@@ -221,6 +198,7 @@ export default function Home() {
             <div className={tutorialActive ? "home-tutorial-grid" : undefined}>
                 <TapGrid
                     sort={sort}
+                    tutorialStep={tutorialActive ? "beerdetail-intro" : undefined}
                     onCardAccepted={tutorialActive ? () => setTutorialPending(false) : undefined}
                 />
             </div>

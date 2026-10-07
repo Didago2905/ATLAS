@@ -80,6 +80,166 @@
     font-size: 16px;
 }
 
+.beerdetail-tutorial-shade {
+    pointer-events: none;
+    transition: opacity 220ms ease;
+}
+
+.beerdetail-tutorial-message {
+    top: auto;
+    bottom: -48px;
+    transition: opacity 220ms ease;
+}
+
+.beerdetail-tutorial-message .home-tutorial-dialogue::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+    pointer-events: auto;
+}
+
+.beerdetail-tutorial-dialogue--waiting {
+    animation: beerdetail-dialogue-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes beerdetail-dialogue-glow {
+    0%, 100% { box-shadow: 0 0 0 rgba(255, 255, 255, 0); }
+    50% { box-shadow: 0 0 16px 2px rgba(255, 255, 255, 0.263); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .beerdetail-tutorial-dialogue--waiting {
+        animation: none;
+        box-shadow: 0 0 12px 1px rgba(255, 255, 255, 0.1);
+    }
+}
+
+.beerdetail-tutorial-message .home-tutorial-triton {
+    width: clamp(180px, 48vw, 240px);
+    margin-right: -45px;
+}
+
+.beerdetail-tutorial-message .home-tutorial-dialogue {
+    max-width: 260px;
+    margin-top: 0;
+    margin-bottom: 64px;
+    transform: translate(8px, -48px);
+    pointer-events: auto;
+}
+
+.beerdetail-tutorial-message .home-tutorial-dialogue::before {
+    left: -4px;
+    top: 48px;
+    transform: rotate(20deg);
+}
+
+.beerdetail-tutorial-copy { position: relative; }
+.beerdetail-tutorial-message--mirrored {
+    left: auto;
+    right: max(12px, env(safe-area-inset-right, 0px));
+    flex-direction: row-reverse;
+}
+
+.beerdetail-tutorial-message--mirrored .home-tutorial-triton {
+    margin-right: 0;
+    margin-left: -45px;
+    transform: scaleX(-1);
+}
+
+.beerdetail-tutorial-message--mirrored .home-tutorial-dialogue {
+    transform: translate(-8px, -48px);
+}
+
+.beerdetail-tutorial-message--mirrored .home-tutorial-dialogue::before {
+    left: auto;
+    right: -4px;
+    border-left: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.18);
+    transform: rotate(-20deg);
+}
+
+.beerdetail-tutorial-copy > div { transition: opacity 180ms ease; }
+.beerdetail-tutorial-message--details {
+    --details-triton-width: clamp(200px, 52vw, 260px);
+    left: auto;
+    right: max(0px, calc((100% - 360px) / 2));
+    bottom: -24px;
+    width: var(--details-triton-width);
+    display: block;
+}
+
+.beerdetail-tutorial-message--details .home-tutorial-triton {
+    width: 100%;
+    height: auto;
+    position: relative;
+    right: -5%;
+    margin: 0;
+    transform: none;
+}
+
+.beerdetail-tutorial-message--details .home-tutorial-dialogue {
+    position: absolute;
+    right: calc(var(--details-triton-width) * 0.70);
+    bottom: calc(var(--details-triton-width) * 1.05);
+    width: min(220px, calc(100vw - var(--details-triton-width) * 0.70 - 16px));
+    max-width: 220px;
+    margin: 0;
+    transform: none;
+}
+
+.beerdetail-tutorial-message--details .home-tutorial-dialogue::before {
+    left: auto;
+    right: -4px;
+    border-left: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.18);
+    transform: rotate(-20deg);
+}
+
+.beerdetail-tutorial-copy-next { position: absolute; inset: 0; }
+.beerdetail-tutorial-message--exploring .home-tutorial-dialogue,
+.beerdetail-tutorial-message--exploring .home-tutorial-dialogue::after { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .beerdetail-tutorial-copy > div { transition: none; }
+}
+
+.beerdetail-tutorial-hint--next { animation: beerdetail-hint-next 600ms ease-in-out; }
+.beerdetail-tutorial-hint--prev { animation: beerdetail-hint-prev 600ms ease-in-out; }
+.beerdetail-tutorial-hint--both { animation: beerdetail-hint-both 1200ms ease-in-out; }
+.beerdetail-tutorial-hint--up { animation: beerdetail-hint-up 600ms ease-in-out; }
+.beerdetail-tutorial-hint--down { animation: beerdetail-hint-down 600ms ease-in-out; }
+
+@keyframes beerdetail-hint-down {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 22px; }
+}
+
+@keyframes beerdetail-hint-up {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 -22px; }
+}
+
+@keyframes beerdetail-hint-next {
+    0%, 100% { translate: 0 0; }
+    50% { translate: -22px 0; }
+}
+@keyframes beerdetail-hint-prev {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 22px 0; }
+}
+@keyframes beerdetail-hint-both {
+    0%, 50%, 100% { translate: 0 0; }
+    25% { translate: -22px 0; }
+    75% { translate: 22px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .beerdetail-tutorial-hint--next,
+    .beerdetail-tutorial-hint--prev,
+    .beerdetail-tutorial-hint--both,
+    .beerdetail-tutorial-hint--up,
+    .beerdetail-tutorial-hint--down { animation: none; }
+}
+
 .home-catalog-icon {
     display: block;
     width: 156.8px;
