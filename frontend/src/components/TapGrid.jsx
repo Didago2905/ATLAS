@@ -370,6 +370,12 @@ export default function TapGrid({ sort, onCardAccepted, tutorialStep }) {
                                     onDragStart={(event) => event.preventDefault()}
                                     onClick={(event) => {
 
+                                        if (tutorialStep && exiting) {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            return;
+                                        }
+
                                         if (suppressHoldClickRef.current || peekBeer) {
                                             event.preventDefault();
                                             event.stopPropagation();

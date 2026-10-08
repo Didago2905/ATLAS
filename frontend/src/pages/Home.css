@@ -98,19 +98,36 @@
     pointer-events: auto;
 }
 
-.beerdetail-tutorial-dialogue--waiting {
-    animation: beerdetail-dialogue-glow 1.6s ease-in-out infinite;
+.beerdetail-dialogue-corner {
+    display: none;
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: rgb(64, 224, 208);
+    border-style: solid;
+    border-width: 0;
+    pointer-events: none;
 }
 
-@keyframes beerdetail-dialogue-glow {
-    0%, 100% { box-shadow: 0 0 0 rgba(255, 255, 255, 0); }
-    50% { box-shadow: 0 0 16px 2px rgba(255, 255, 255, 0.263); }
+.beerdetail-tutorial-dialogue--waiting > .beerdetail-dialogue-corner {
+    display: block;
+    animation: beerdetail-dialogue-corners 1.6s ease-in-out infinite;
+}
+
+.beerdetail-dialogue-corner--tl { top: -5px; left: -5px; border-top-width: 2px; border-left-width: 2px; --corner-x: -3px; --corner-y: -3px; }
+.beerdetail-dialogue-corner--tr { top: -5px; right: -5px; border-top-width: 2px; border-right-width: 2px; --corner-x: 3px; --corner-y: -3px; }
+.beerdetail-dialogue-corner--bl { bottom: -5px; left: -5px; border-bottom-width: 2px; border-left-width: 2px; --corner-x: -3px; --corner-y: 3px; }
+.beerdetail-dialogue-corner--br { bottom: -5px; right: -5px; border-bottom-width: 2px; border-right-width: 2px; --corner-x: 3px; --corner-y: 3px; }
+
+@keyframes beerdetail-dialogue-corners {
+    0%, 100% { transform: translate(0, 0); opacity: 0.55; }
+    50% { transform: translate(var(--corner-x), var(--corner-y)); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .beerdetail-tutorial-dialogue--waiting {
+    .beerdetail-tutorial-dialogue--waiting > .beerdetail-dialogue-corner {
         animation: none;
-        box-shadow: 0 0 12px 1px rgba(255, 255, 255, 0.1);
+        opacity: 0.8;
     }
 }
 
@@ -198,6 +215,84 @@
 .beerdetail-tutorial-copy-next { position: absolute; inset: 0; }
 .beerdetail-tutorial-message--exploring .home-tutorial-dialogue,
 .beerdetail-tutorial-message--exploring .home-tutorial-dialogue::after { pointer-events: none; }
+
+.beerdetail-tutorial-message--brewery-left {
+    left: max(0px, calc((100% - 360px) / 2));
+    right: auto;
+}
+
+.beerdetail-tutorial-message--brewery-left .home-tutorial-triton {
+    left: -5%;
+    right: auto;
+}
+
+.beerdetail-tutorial-message--brewery-left .home-tutorial-dialogue {
+    left: calc(var(--details-triton-width) * 0.70);
+    right: auto;
+}
+
+.beerdetail-tutorial-message--brewery-left .home-tutorial-dialogue::before {
+    left: -4px;
+    right: auto;
+    border-right: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.18);
+    transform: rotate(20deg);
+}
+
+.beerdetail-tutorial-message--brewery-left .beerdetail-tutorial-dialogue--brewery-reading {
+    left: 0;
+    right: auto;
+    bottom: calc(100% + 12px);
+    width: min(220px, calc(100vw - 32px));
+}
+
+.beerdetail-tutorial-dialogue--brewery-reading .beerdetail-tutorial-copy-next[aria-hidden="false"] {
+    position: relative;
+}
+
+.beerdetail-tutorial-dialogue--brewery-reading .beerdetail-tutorial-copy > div:first-child {
+    display: none;
+}
+
+.beerdetail-tutorial-glassware--waiting {
+    animation: beerdetail-glassware-glow 1.6s ease-in-out infinite;
+}
+
+.beerdetail-tutorial-brewery-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: calc(100% + 10px);
+    aspect-ratio: 1;
+    box-sizing: border-box;
+    border: 2px solid rgb(64, 224, 208);
+    border-radius: 50%;
+    background: transparent;
+    pointer-events: none;
+    animation: beerdetail-brewery-ring 1.6s ease-in-out infinite;
+}
+
+@keyframes beerdetail-brewery-ring {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.55; }
+    50% { transform: translate(-50%, -50%) scale(1.04); opacity: 1; }
+}
+
+@keyframes beerdetail-glassware-glow {
+    0%, 100% { filter: drop-shadow(0 0 0 rgba(64, 224, 208, 0)) drop-shadow(0 0 0 rgba(64, 224, 208, 0)); }
+    50% { filter: drop-shadow(0 0 5px rgba(64, 224, 208, 0.85)) drop-shadow(0 0 16px rgba(64, 224, 208, 0.65)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .beerdetail-tutorial-brewery-ring {
+        animation: none;
+        transform: translate(-50%, -50%);
+        opacity: 0.85;
+    }
+    .beerdetail-tutorial-glassware--waiting {
+        animation: none;
+        filter: drop-shadow(0 0 4px rgba(64, 224, 208, 0.65)) drop-shadow(0 0 12px rgba(64, 224, 208, 0.4));
+    }
+}
 
 @media (prefers-reduced-motion: reduce) {
     .beerdetail-tutorial-copy > div { transition: none; }

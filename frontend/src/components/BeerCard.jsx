@@ -57,11 +57,57 @@ const withAlpha = (hex, alpha) => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
+export default function BeerCard({ beer, layoutRef, spatialDebug = false, glasswareTutorialPhase, onGlasswareTargetChange, onGlasswarePeekOpen, onGlasswarePeekClose, onBreweryPopoverChange, breweryInstructionRef }) {
 
     const [peekAsset, setPeekAsset] = useState(null);
     const glassPeekOpenRef = useRef(false);
+    const peekImageRef = useRef(null);
+    const tutorialHoldRef = useRef(null);
+    const learnedPeekRef = useRef(null);
+    const [highlightPeekClose, setHighlightPeekClose] = useState(false);
+    const glasswareTutorialRef = useRef(null);
+    const glasswareTarget = Object.hasOwn(beer.prices || {}, "taster") ? "taster"
+        : Object.keys(beer.prices || {}).find(key => Object.hasOwn(GLASSWARE, key)) || null;
+    const highlightGlassware = ["glassware-highlight", "glassware-crossfade", "glassware-await"].includes(glasswareTutorialPhase);
+    const breweryTeaching = ["glassware-closed", "brewery-crossfade", "brewery-await", "brewery-open", "brewery-closed"].includes(glasswareTutorialPhase);
+
+    useEffect(() => {
+        glasswareTutorialRef.current = { phase: glasswareTutorialPhase, key: glasswareTarget, beerId: String(beer.id), onOpen: onGlasswarePeekOpen, onClose: onGlasswarePeekClose, instructionRef: breweryInstructionRef };
+    }, [glasswareTutorialPhase, glasswareTarget, beer.id, onGlasswarePeekOpen, onGlasswarePeekClose, breweryInstructionRef]);
+
+    useEffect(() => {
+        onGlasswareTargetChange?.({ beerId: String(beer.id), key: glasswareTarget });
+    }, [beer.id, glasswareTarget, onGlasswareTargetChange]);
+
+    useEffect(() => {
+        const intent = tutorialHoldRef.current;
+        const current = glasswareTutorialRef.current;
+        if (!peekAsset && learnedPeekRef.current) {
+            const closed = learnedPeekRef.current;
+            learnedPeekRef.current = null;
+            current?.onClose?.(closed);
+        }
+        if (!peekAsset || !intent) return;
+        tutorialHoldRef.current = null;
+        if (current?.phase === "glassware-await" && current.key === intent.key
+            && current.beerId === intent.beerId && peekAsset === GLASSWARE[intent.key]
+            && peekImageRef.current?.closest('[role="dialog"]')) {
+            learnedPeekRef.current = intent;
+            current.onOpen?.(intent);
+        }
+    }, [peekAsset]);
+
+    useEffect(() => {
+        setHighlightPeekClose(false);
+        if (!peekAsset || glasswareTutorialPhase !== "glassware-learned" || !learnedPeekRef.current) return;
+        const timer = window.setTimeout(() => setHighlightPeekClose(true), 2000);
+        return () => window.clearTimeout(timer);
+    }, [peekAsset, glasswareTutorialPhase]);
     const [showBrewery, setShowBrewery] = useState(false);
+
+    useEffect(() => {
+        if (glasswareTutorialPhase === "brewery-crossfade") setShowBrewery(false);
+    }, [glasswareTutorialPhase]);
 
     const [showArt, setShowArt] = useState(false);
     const [backgroundLoaded, setBackgroundLoaded] = useState(() =>
@@ -70,10 +116,20 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
     const lastTap = useRef(0);
 
     const panelRef = useRef(null);
+    const breweryLogoRef = useRef(null);
+    const breweryPopoverRef = useRef({ beerId: String(beer.id), open: false });
     const titleRef = useRef(null);
     const metadataRef = useRef(null);
     const descriptionRef = useRef(null);
     const pricesRef = useRef(null);
+
+    useEffect(() => {
+        const beerId = String(beer.id);
+        const previous = breweryPopoverRef.current;
+        breweryPopoverRef.current = { beerId, open: showBrewery };
+        if (previous.beerId !== beerId || previous.open === showBrewery || !panelRef.current) return;
+        onBreweryPopoverChange?.({ beerId, open: showBrewery });
+    }, [beer.id, showBrewery, onBreweryPopoverChange]);
 
     useEffect(() => {
         let candidate = null;
@@ -94,12 +150,20 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
             const asset = pricesRef.current?.contains(trigger) && Object.hasOwn(GLASSWARE, key) ? GLASSWARE[key] : null;
             if (!asset) return;
             const touch = event.touches[0];
+            const tutorial = glasswareTutorialRef.current;
+            if (["glassware-closed", "brewery-crossfade", "brewery-await", "brewery-open", "brewery-closed"].includes(tutorial?.phase)) return;
+            const intent = tutorial?.phase === "glassware-await" && tutorial.key === key
+                ? { phase: tutorial.phase, key, beerId: tutorial.beerId, peekAsset: asset.src } : null;
             const pending = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
             pending.timer = window.setTimeout(() => {
                 if (candidate !== pending) return;
                 candidate = null;
+                const current = glasswareTutorialRef.current;
+                if (["glassware-closed", "brewery-crossfade", "brewery-await", "brewery-open", "brewery-closed"].includes(current?.phase)) return;
                 suppressHoldClick = true;
                 glassPeekOpenRef.current = true;
+                tutorialHoldRef.current = intent && current?.phase === intent.phase
+                    && current.key === intent.key && current.beerId === intent.beerId ? intent : null;
                 setPeekAsset(asset);
             }, 500);
             candidate = pending;
@@ -169,6 +233,7 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
             : {};
 
     const handleDoubleTap = (e) => {
+        if (breweryTeaching) return;
 
         const now = Date.now();
         const delta = now - lastTap.current;
@@ -200,7 +265,12 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
 
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (panelRef.current && !panelRef.current.contains(event.target)) {
+            const tutorial = glasswareTutorialRef.current;
+            const instruction = tutorial?.phase === "brewery-open" ? tutorial.instructionRef?.current?.getBoundingClientRect() : null;
+            if (instruction && event.clientX >= instruction.left && event.clientX <= instruction.right
+                && event.clientY >= instruction.top && event.clientY <= instruction.bottom) return;
+            if (panelRef.current && !panelRef.current.contains(event.target)
+                && !breweryLogoRef.current?.contains(event.target)) {
                 setShowBrewery(false);
             }
         };
@@ -612,6 +682,7 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
                                     />
                                     <img
                                         src={glass.src}
+                                        className={highlightGlassware && size === glasswareTarget ? "beerdetail-tutorial-glassware--waiting" : undefined}
                                         alt=""
                                         aria-hidden="true"
                                         draggable={false}
@@ -640,18 +711,19 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
                 )}
             </div>
 
+            <span style={{ position: "absolute", bottom: "10px", right: "10px", width: "70px", zIndex: 1, pointerEvents: "none" }}>
             <img
+                ref={breweryLogoRef}
                 onClick={(e) => {
                     e.stopPropagation();
+                    if (breweryTeaching && !["brewery-await", "brewery-open"].includes(glasswareTutorialPhase)) return;
                     setShowBrewery(prev => !prev);
                 }}
                 src={logo}
                 alt="brewery"
                 style={{
-                    position: "absolute",
-                    bottom: "10px",
-                    right: "10px",
-                    zIndex: 1,
+                    display: "block",
+                    pointerEvents: "auto",
                     width: "70px",
                     opacity: 0.2,
                     cursor: "pointer",
@@ -659,9 +731,12 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
                     filter: "grayscale(100%) contrast(1.2)"
                 }}
             />
+            {glasswareTutorialPhase === "brewery-await" && <span className="beerdetail-tutorial-brewery-ring" aria-hidden="true" />}
+            </span>
 
             <div
                 ref={panelRef}
+                onClick={(event) => event.stopPropagation()}
                 style={{
                     position: "absolute",
                     bottom: "90px",
@@ -734,6 +809,7 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
                 <button
                     type="button"
                     aria-label="Cerrar cristalería"
+                    className={peekAsset && glasswareTutorialPhase === "glassware-learned" && highlightPeekClose ? "beerdetail-tutorial-glassware--waiting" : undefined}
                     onClick={() => {
                         glassPeekOpenRef.current = false;
                         setPeekAsset(null);
@@ -758,6 +834,7 @@ export default function BeerCard({ beer, layoutRef, spatialDebug = false }) {
                 </button>
                 </div>
                 <img
+                    ref={peekImageRef}
                     src={peekAsset.src}
                     alt={peekAsset.label}
                     draggable={false}

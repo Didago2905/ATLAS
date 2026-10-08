@@ -28,7 +28,7 @@ export default function Home() {
     const settingsTriggerRef = useRef(null);
     const settingsPanelId = useId();
     const { beers } = useCatalogSession();
-    const [tutorialPending, setTutorialPending] = useState(() =>
+    const [tutorialPending] = useState(() =>
         new URLSearchParams(window.location.search).get("tutorial") === "1"
     );
     const tutorialActive = tutorialPending && beers.length > 0 && !peekAsset;
@@ -199,7 +199,6 @@ export default function Home() {
                 <TapGrid
                     sort={sort}
                     tutorialStep={tutorialActive ? "beerdetail-intro" : undefined}
-                    onCardAccepted={tutorialActive ? () => setTutorialPending(false) : undefined}
                 />
             </div>
 
