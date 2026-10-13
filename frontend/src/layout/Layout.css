@@ -22,26 +22,82 @@
 
 .tap-list-settings__panel {
     position: absolute;
-    bottom: calc(107.5% + 6px);
+    bottom: calc(107.5% + 3px);
     left: 50%;
     transform: translateX(-50%);
-    width: max-content;
+    width: 286px;
     max-width: calc(100vw - 24px);
     box-sizing: border-box;
     z-index: 100;
-    padding: 10px;
+    padding: 6px 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: max-content 36px;
+    align-content: start;
+    align-items: stretch;
+    row-gap: 6px;
+    column-gap: 4px;
+    max-height: min(160px, calc(100dvh - 24px));
+    overflow-y: auto;
+    overflow-x: hidden;
     border: 1px solid #666;
     border-radius: 8px;
     background: #171717;
     color: #fff;
     -webkit-tap-highlight-color: transparent;
 }
-.tap-list-settings__panel h2 { margin: 0 0 7px; font-size: 12px; font-weight: 500; }
-.tap-list-settings__swatches { display: flex; flex-wrap: wrap; gap: 3px; }
+.tap-list-settings__panel h2 { margin: 0; font-size: 12px; line-height: 13px; font-weight: 500; }
+.tap-list-settings__quadrant {
+    min-width: 0;
+    min-height: 0;
+    padding: 0 2px;
+    border: 1px solid #333;
+    border-radius: 5px;
+}
+.tap-list-settings__quadrant:nth-child(n + 3) {
+    padding: 2px;
+    box-sizing: border-box;
+}
+.tap-list-settings__action {
+    display: block;
+    padding: 2px 0;
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.85);
+    font: inherit;
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+}
+.tap-list-settings__action:focus,
+.tap-list-settings__action:focus-visible { outline: none; }
+.tap-list-settings__panel--tips { display: block; }
+.tap-list-settings__tips h2 { margin-top: 8px; }
+.tap-list-settings__tips p { margin: 5px 0 8px; font-size: 11px; line-height: 1.35; }
+.tap-list-settings__tips a { color: inherit; text-decoration: underline; overflow-wrap: anywhere; }
+.tap-list-settings__credits-action {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-start;
+    padding: 0;
+    font-size: 12px;
+    line-height: 13px;
+    font-weight: 500;
+    color: inherit;
+}
+.tap-list-settings__placeholder {
+    margin: 3px 0 0;
+    font-size: 10px;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.45);
+    overflow-wrap: anywhere;
+}
+.tap-list-settings__swatches { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 79px; row-gap: 0; column-gap: 3px; }
 .tap-list-settings__swatches button {
     display: grid;
     place-items: center;
-    width: 38px;
+    width: min(38px, 100%);
     height: 38px;
     padding: 4px;
     border: 2px solid transparent;
@@ -55,7 +111,11 @@
 .tap-list-settings__swatches button:focus,
 .tap-list-settings__swatches button:focus-visible { outline: none; }
 .tap-list-settings__swatches button:active { background: #555; }
-.tap-list-settings__swatches span { width: 24px; height: 24px; border: 1px solid #888; border-radius: 50%; }
+.tap-list-settings__swatches span { width: 21px; height: 21px; border: 1px solid #888; border-radius: 50%; }
+
+@media (max-width: 240px) {
+    .tap-list-settings__panel { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+}
 
 .tap-list-branding {
     display: flex;

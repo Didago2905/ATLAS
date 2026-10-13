@@ -4,6 +4,7 @@ import BeerCard from "../components/BeerCard";
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import useTutorialImage from "../tutorial/useTutorialImage";
+import { tutorialProgressKey, readTutorialOutcome, finishTutorial, hasActiveTutorial } from "../tutorial/tutorialLifecycle";
 import "./Home.css";
 
 const tritonIntro = "/static/icons/tutorial/triton-beerdetail-intro.webp";
@@ -14,6 +15,17 @@ export default function BeerDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
+    const [tutorialSessionAllowed] = useState(() => {
+        const requested = ["beerdetail-intro", "beerdetail-horizontal", "beerdetail-vertical-to-art", "beerdetail-art-arrived", "beerdetail-return-to-info", "beerdetail-details"].includes(location.state?.tutorialStep);
+        if (!requested || readTutorialOutcome()) return false;
+        if (!hasActiveTutorial()) {
+            // A fresh document cannot reconstruct the local gestures or viewMode.
+            finishTutorial("omitted");
+            return false;
+        }
+        return true;
+    });
+    const tutorialDepartureRef = useRef(null);
     const [tutorialCompletedKey, setTutorialCompletedKey] = useState(null);
     const [tutorialClosingKey, setTutorialClosingKey] = useState(null);
     const [tutorialPulseKey, setTutorialPulseKey] = useState(null);
@@ -30,7 +42,8 @@ export default function BeerDetail() {
     const tutorialReturnDialogue = ["return-crossfade", "vertical-to-info", "info-arrived"].includes(tutorialDialoguePhase);
     const tutorialGlasswareDialogue = ["glassware-crossfade", "glassware-await", "glassware-learned"].includes(tutorialDialoguePhase);
     const tutorialBreweryDialogue = ["brewery-crossfade", "brewery-await", "brewery-open", "brewery-closed"].includes(tutorialDialoguePhase);
-    const tutorialDetailsDialogue = ["details-crossfade", "details", "glassware-highlight", "glassware-crossfade", "glassware-await", "glassware-learned", "glassware-closed-crossfade", "glassware-closed"].includes(tutorialDialoguePhase) || tutorialBreweryDialogue;
+    const tutorialHomeReturnDialogue = ["home-return-crossfade", "home-return-await"].includes(tutorialDialoguePhase);
+    const tutorialDetailsDialogue = ["details-crossfade", "details", "glassware-highlight", "glassware-crossfade", "glassware-await", "glassware-learned", "glassware-closed-crossfade", "glassware-closed"].includes(tutorialDialoguePhase) || tutorialBreweryDialogue || tutorialHomeReturnDialogue;
     const tutorialGlasswareClosedDialogue = ["glassware-closed-crossfade", "glassware-closed"].includes(tutorialDialoguePhase);
     const [tutorialGlasswareTarget, setTutorialGlasswareTarget] = useState(null);
     const reportGlasswareTarget = useCallback(target => setTutorialGlasswareTarget(target), []);
@@ -39,7 +52,7 @@ export default function BeerDetail() {
         || ["beerdetail-horizontal", "beerdetail-vertical-to-art", "beerdetail-art-arrived", "beerdetail-return-to-info"].includes(location.state?.tutorialStep);
     const tutorialActive = (location.state?.tutorialStep === "beerdetail-intro"
         || ["beerdetail-horizontal", "beerdetail-vertical-to-art", "beerdetail-art-arrived", "beerdetail-return-to-info", "beerdetail-details"].includes(location.state?.tutorialStep))
-        && tutorialCompletedKey !== location.key;
+        && tutorialSessionAllowed && !readTutorialOutcome() && tutorialCompletedKey !== location.key;
     const tutorialClosing = tutorialClosingKey === location.key;
     const tritonReady = useTutorialImage(tritonIntro, tutorialActive);
     const tritonDetailsReady = useTutorialImage(tritonDetails, tutorialActive
@@ -48,7 +61,19 @@ export default function BeerDetail() {
     const tutorialDetailsTapReady = tutorialActive && tutorialDialoguePhase === "details"
         && tutorialGlasswareTarget?.beerId === id && !!tutorialGlasswareTarget.key;
     const tutorialGlobalTapShield = !tutorialExploring || tutorialDetailsTapReady
-        || ["glassware-highlight", "glassware-crossfade", "glassware-closed", "brewery-crossfade"].includes(tutorialDialoguePhase);
+        || ["glassware-highlight", "glassware-crossfade", "glassware-closed", "brewery-crossfade", "brewery-closed", "home-return-crossfade", "home-return-await"].includes(tutorialDialoguePhase);
+
+    useLayoutEffect(() => {
+        const previous = tutorialDepartureRef.current;
+        if (previous?.active && !tutorialActive && !previous.guidedReturn && !readTutorialOutcome()) finishTutorial("omitted");
+        tutorialDepartureRef.current = { active: tutorialActive, guidedReturn: tutorialHomeReturnDialogue };
+    });
+    useLayoutEffect(() => () => {
+        const current = tutorialDepartureRef.current;
+        // Observe an actual SPA departure; StrictMode cleanup leaves the URL intact.
+        if (current?.active && !current.guidedReturn && !readTutorialOutcome()
+            && !window.location.pathname.startsWith("/beer/")) finishTutorial("omitted");
+    }, []);
 
     const beersFromState = location.state?.beers;
     const indexFromState = location.state?.currentIndex;
@@ -71,6 +96,15 @@ export default function BeerDetail() {
     const [visible, setVisible] = useState(false);
     const [direction, setDirection] = useState(null);
     const [animating, setAnimating] = useState(false);
+    const [boundaryFlash, setBoundaryFlash] = useState(null);
+    const boundaryFlashRef = useRef(null);
+    const boundaryFlashTimerRef = useRef(null);
+    const breweryPopoverOpenRef = useRef(false);
+    useEffect(() => {
+        setBoundaryFlash(null);
+        breweryPopoverOpenRef.current = false;
+        return () => window.clearTimeout(boundaryFlashTimerRef.current);
+    }, [id]);
 
     const [viewMode, setViewMode] = useState("info");
     const [artVisible, setArtVisible] = useState(false);
@@ -90,7 +124,7 @@ export default function BeerDetail() {
     const tutorialVerticalActive = tutorialActive && !tutorialVerticalComplete
         && tutorialDialoguePhase === "vertical-to-art";
     const tutorialReturnActive = tutorialActive && tutorialDialoguePhase === "vertical-to-info";
-    const tutorialHorizontalActive = !tutorialHorizontalComplete && (
+    const tutorialHorizontalActive = tutorialActive && !tutorialHorizontalComplete && (
         (location.state?.tutorialStep === "beerdetail-intro" && tutorialDialoguePhase === "horizontal")
         || location.state?.tutorialStep === "beerdetail-horizontal"
     );
@@ -103,6 +137,7 @@ export default function BeerDetail() {
 
     useEffect(() => {
         const accepted = location.state?.tutorialHorizontalSwipe;
+        if (!tutorialActive) return;
         if (!tutorialArtHorizontalComplete && location.state?.tutorialStep === "beerdetail-art-arrived"
             && accepted?.phase === "horizontal-art" && accepted.originMode === "art"
             && (accepted.direction === "prev" || accepted.direction === "next")
@@ -112,10 +147,11 @@ export default function BeerDetail() {
             setTutorialHintAnimation(null);
             setTutorialDialoguePhase("return-waiting");
         }
-    }, [id, beer, location.state, viewMode, tutorialArtHorizontalComplete]);
+    }, [id, beer, location.state, viewMode, tutorialArtHorizontalComplete, tutorialActive]);
 
     useEffect(() => {
         const accepted = location.state?.tutorialHorizontalSwipe;
+        if (!tutorialActive) return;
         if (!tutorialHorizontalComplete && location.state?.tutorialStep === "beerdetail-horizontal"
             && accepted && accepted.originMode === "info"
             && (accepted.direction === "prev" || accepted.direction === "next")
@@ -124,9 +160,10 @@ export default function BeerDetail() {
             setTutorialHorizontalComplete(true);
             setTutorialDialoguePhase("vertical-waiting");
         }
-    }, [id, beer, location.state, tutorialHorizontalComplete]);
+    }, [id, beer, location.state, tutorialHorizontalComplete, tutorialActive]);
 
     useEffect(() => {
+        if (!tutorialActive) return;
         if (tutorialDialoguePhase !== "intro-waiting" && tutorialDialoguePhase !== "vertical-waiting" && !tutorialVerticalDialogue
             && tutorialDialoguePhase !== "art-waiting" && !tutorialArtDialogue
             && tutorialDialoguePhase !== "return-waiting" && !tutorialReturnDialogue) return;
@@ -171,7 +208,7 @@ export default function BeerDetail() {
             startEvents.forEach(type => window.removeEventListener(type, startContact, true));
             endEvents.forEach(type => window.removeEventListener(type, endContact, true));
         };
-    }, [tutorialDialoguePhase, tutorialVerticalDialogue, tutorialArtDialogue, tutorialReturnDialogue, viewMode, id, artVisible, tritonDetailsReady, tritonReady, visible, beer?.id]);
+    }, [tutorialDialoguePhase, tutorialVerticalDialogue, tutorialArtDialogue, tutorialReturnDialogue, viewMode, id, artVisible, tritonDetailsReady, tritonReady, visible, beer?.id, tutorialActive]);
 
     useEffect(() => {
         if ((!tutorialHorizontalActive && !tutorialVerticalActive && !tutorialArtHorizontalActive && !tutorialReturnActive)
@@ -228,7 +265,7 @@ export default function BeerDetail() {
         };
     }, [tutorialHorizontalActive, tutorialVerticalActive, tutorialArtHorizontalActive, tutorialReturnActive, viewMode, id, prevBeer?.id, nextBeer?.id]);
 
-    const horizontalTutorialState = (acceptedDirection, destination) => tutorialDetailsDialogue || tutorialDialoguePhase === "info-arrived" ? {
+    const horizontalTutorialState = (acceptedDirection, destination) => !tutorialActive ? {} : tutorialDetailsDialogue || tutorialDialoguePhase === "info-arrived" ? {
         tutorialStep: "beerdetail-details",
     } : tutorialReturnDialogue || tutorialDialoguePhase === "return-waiting" ? {
         tutorialStep: "beerdetail-return-to-info",
@@ -258,11 +295,12 @@ export default function BeerDetail() {
     }, [tutorialActive, tritonReady, visible, beer, tutorialClosing, location.key, tutorialExploring, tutorialDialoguePhase]);
 
     useEffect(() => {
-        const nextPhase = { crossfade: "horizontal", "vertical-crossfade": "vertical-to-art", "art-crossfade": "horizontal-art", "return-crossfade": "vertical-to-info", "details-crossfade": "details", "glassware-highlight": "glassware-crossfade", "glassware-crossfade": "glassware-await", "glassware-closed-crossfade": "glassware-closed", "brewery-crossfade": "brewery-await" }[tutorialDialoguePhase];
+        if (!tutorialActive) return;
+        const nextPhase = { crossfade: "horizontal", "vertical-crossfade": "vertical-to-art", "art-crossfade": "horizontal-art", "return-crossfade": "vertical-to-info", "details-crossfade": "details", "glassware-highlight": "glassware-crossfade", "glassware-crossfade": "glassware-await", "glassware-closed-crossfade": "glassware-closed", "brewery-crossfade": "brewery-await", "home-return-crossfade": "home-return-await" }[tutorialDialoguePhase];
         if (!nextPhase) return;
         const timer = window.setTimeout(() => setTutorialDialoguePhase(nextPhase), 180);
         return () => window.clearTimeout(timer);
-    }, [tutorialDialoguePhase]);
+    }, [tutorialDialoguePhase, tutorialActive]);
 
     useEffect(() => {
         if (!tutorialClosing) return;
@@ -1207,11 +1245,18 @@ export default function BeerDetail() {
                     transform: "translateX(-50%)",
                     width: "100%",
                     maxWidth: "360px",
-                    zIndex: tutorialActive && tutorialExploring && tutorialGlobalTapShield ? 204 : tutorialActive ? 201 : 10,
+                    zIndex: tutorialActive && tutorialGlobalTapShield ? 204 : tutorialActive ? 201 : 10,
                 }}
             >
                 <div
-                    onClick={() => navigate("/", { replace: true })}
+                    className={tutorialActive && tutorialDialoguePhase === "home-return-await" ? "beerdetail-tutorial-glassware--waiting beerdetail-tutorial-back--waiting" : undefined}
+                    onClick={() => {
+                        if (tutorialActive && !tutorialHomeReturnDialogue) finishTutorial("omitted");
+                        navigate("/", {
+                            replace: true,
+                            ...(tutorialActive && tutorialHomeReturnDialogue ? { state: { tutorialStep: "home-after-beerdetail" } } : {}),
+                        });
+                    }}
                     style={{
                         color: "#aaa",
                         cursor: "pointer",
@@ -1440,6 +1485,23 @@ export default function BeerDetail() {
                         return;
                     }
 
+                    const boundarySide = deltaX > 50 && index === 0 && !prevBeer ? "left"
+                        : deltaX < -50 && index === beers.length - 1 && !nextBeer ? "right" : null;
+                    const transitioning = outerRef.current?.getAnimations({ subtree: true }).some(
+                        animation => typeof animation.transitionProperty === "string" && animation.playState === "running"
+                    );
+                    if (boundarySide && tutorialAllowsHorizontal && !animating && visible && !transitioning
+                        && !breweryPopoverOpenRef.current && !document.querySelector('[role="dialog"]')
+                        && Number.isInteger(index) && index >= 0 && index < beers.length
+                        && beer && String(beers[index]?.id) === id) {
+                        window.clearTimeout(boundaryFlashTimerRef.current);
+                        if (boundaryFlash === boundarySide) {
+                            boundaryFlashRef.current?.getAnimations().forEach(animation => { animation.currentTime = 0; });
+                        }
+                        setBoundaryFlash(boundarySide);
+                        boundaryFlashTimerRef.current = window.setTimeout(() => setBoundaryFlash(null), 350);
+                    }
+
                     if (deltaX > 50 && prevBeer && tutorialAllowsHorizontal) {
                         action = "prev";
                         const tutorialState = horizontalTutorialState("prev", prevBeer);
@@ -1648,6 +1710,7 @@ export default function BeerDetail() {
                                             && closed.key === tutorialGlasswareTarget?.key) setTutorialDialoguePhase("glassware-closed-crossfade");
                                     }}
                                     onBreweryPopoverChange={({ beerId, open }) => {
+                                        if (beerId === id) breweryPopoverOpenRef.current = open;
                                         if (!tutorialActive || beerId !== id || viewMode !== "info") return;
                                         setTutorialDialoguePhase(phase => open && phase === "brewery-await" ? "brewery-open"
                                             : !open && phase === "brewery-open" ? "brewery-closed" : phase);
@@ -1700,6 +1763,25 @@ export default function BeerDetail() {
                 </div>
 
             </div>
+            {boundaryFlash && <div
+                ref={boundaryFlashRef}
+                key={boundaryFlash}
+                className={`beerdetail-boundary-flash beerdetail-boundary-flash--${boundaryFlash}`}
+                aria-hidden="true"
+            />}
+            {tutorialActive && tutorialHintAnimation && (viewMode === "info" || tutorialArtHorizontalActive || tutorialReturnActive) && (
+                <div className="beerdetail-tutorial-finger" data-direction={tutorialHintAnimation} aria-hidden="true">
+                    <span className={`beerdetail-tutorial-finger-motion beerdetail-tutorial-hint--${tutorialHintAnimation}`}>
+                    <svg
+                        viewBox="0 0 64 80"
+                        focusable="false"
+                    >
+                        <circle cx="25" cy="13" r="11" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.55" />
+                        <path d="M20 42V14a5 5 0 0 1 10 0v22-7a5 5 0 0 1 10 0v9-5a5 5 0 0 1 10 0v9-3a5 5 0 0 1 10 0v15c0 12-7 20-18 20H31c-6 0-10-3-13-8L8 50a5 5 0 0 1 8-6l4 5Z" fill="currentColor" stroke="#083f44" strokeWidth="2" strokeLinejoin="round" />
+                    </svg>
+                    </span>
+                </div>
+            )}
             {tutorialActive && !["intro-waiting", "vertical-waiting", "art-waiting", "info-arrived"].includes(tutorialDialoguePhase) && (
                 <>
                     {tutorialGlobalTapShield && <div
@@ -1714,9 +1796,13 @@ export default function BeerDetail() {
                             event.preventDefault();
                             event.stopPropagation();
                             if (tutorialClosing) return;
+                            if (tutorialDialoguePhase === "brewery-closed") {
+                                try { sessionStorage.setItem(tutorialProgressKey, "home-after-beerdetail"); } catch { /* Volver also carries route state. */ }
+                            }
                             setTutorialDialoguePhase(phase => phase === "intro" ? "crossfade"
                                 : phase === "details" && tutorialDetailsTapReady ? "glassware-highlight"
-                                    : phase === "glassware-closed" ? "brewery-crossfade" : phase);
+                                    : phase === "glassware-closed" ? "brewery-crossfade"
+                                        : phase === "brewery-closed" ? "home-return-crossfade" : phase);
                         }}
                     />}
                     <div
@@ -1730,7 +1816,7 @@ export default function BeerDetail() {
                         aria-hidden="true"
                     />
                     <aside
-                        className={`home-tutorial-message beerdetail-tutorial-message${tutorialExploring ? " beerdetail-tutorial-message--exploring" : ""}${tutorialMirrored ? " beerdetail-tutorial-message--mirrored" : ""}${tutorialDetailsDialogue ? " beerdetail-tutorial-message--details" : ""}${tutorialBreweryDialogue ? " beerdetail-tutorial-message--brewery-left" : ""}`}
+                        className={`home-tutorial-message beerdetail-tutorial-message${tutorialExploring ? " beerdetail-tutorial-message--exploring" : ""}${tutorialMirrored ? " beerdetail-tutorial-message--mirrored" : ""}${tutorialDetailsDialogue ? " beerdetail-tutorial-message--details" : ""}${tutorialBreweryDialogue ? " beerdetail-tutorial-message--brewery-left" : ""}${tutorialHomeReturnDialogue ? " beerdetail-tutorial-message--home-return" : ""}${tutorialDialoguePhase === "home-return-await" ? " beerdetail-tutorial-message--home-return-await" : ""}`}
                         style={{ opacity: tutorialClosing ? 0 : 1 }}
                         aria-live="polite"
                     >
@@ -1743,9 +1829,7 @@ export default function BeerDetail() {
                         />
                         <div
                             ref={breweryInstructionRef}
-                            className={`home-tutorial-dialogue${tutorialDialoguePhase === "brewery-open" ? " beerdetail-tutorial-dialogue--brewery-reading" : ""}${tutorialDetailsTapReady || tutorialDialoguePhase === "glassware-closed" || tutorialPulseKey === location.key && !tutorialClosing && !tutorialExploring && tutorialDialoguePhase === "intro" ? " beerdetail-tutorial-dialogue--waiting" : ""}`}
-                            style={{ visibility: tutorialDialoguePhase === "brewery-closed" ? "hidden" : "visible" }}
-                            aria-hidden={tutorialDialoguePhase === "brewery-closed"}
+                            className={`home-tutorial-dialogue${tutorialDialoguePhase === "brewery-open" ? " beerdetail-tutorial-dialogue--brewery-reading" : ""}${tutorialDetailsTapReady || ["glassware-closed", "brewery-closed"].includes(tutorialDialoguePhase) || tutorialPulseKey === location.key && !tutorialClosing && !tutorialExploring && tutorialDialoguePhase === "intro" ? " beerdetail-tutorial-dialogue--waiting" : ""}`}
                         >
                             <span className="beerdetail-dialogue-corner beerdetail-dialogue-corner--tl" aria-hidden="true" />
                             <span className="beerdetail-dialogue-corner beerdetail-dialogue-corner--tr" aria-hidden="true" />
@@ -1822,6 +1906,17 @@ export default function BeerDetail() {
                                     style={{ opacity: tutorialDialoguePhase === "brewery-open" ? 1 : 0 }}
                                     aria-hidden={tutorialDialoguePhase !== "brewery-open"}>
                                     <p>¡Aquí conocerás a quienes hicieron posible esta cerveza! Cuando termines, toca fuera de esta ventana para continuar.</p>
+                                </div>
+                                <div className="beerdetail-tutorial-copy-next"
+                                    style={{ opacity: tutorialDialoguePhase === "brewery-closed" ? 1 : 0 }}
+                                    aria-hidden={tutorialDialoguePhase !== "brewery-closed"}>
+                                    <p><strong>¡Y eso es todo por aquí!</strong> Pero nuestra aventura todavía no termina…</p>
+                                    <p>¡Hay mucho más por descubrir!</p>
+                                </div>
+                                <div className="beerdetail-tutorial-copy-next"
+                                    style={{ opacity: tutorialHomeReturnDialogue ? 1 : 0 }}
+                                    aria-hidden={!tutorialHomeReturnDialogue}>
+                                    <p>¡Ahora volvamos al inicio! Puedes usar el gesto de volver de tu celular o tocar el botón de arriba. ¡Nos vemos allá!</p>
                                 </div>
                             </div>
                         </div>

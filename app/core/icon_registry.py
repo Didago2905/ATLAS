@@ -61,6 +61,11 @@ ICON_REGISTRY = MappingProxyType({
         DERIVATIVE_ROOT / "tutorial" / "triton-beerdetail-brewery-left.webp", (900, 600),
         "WEBP", lossless=False, quality=90,
     ),
+    ("tutorial", "triton_home_finale"): IconSpec(
+        "tutorial", "triton_home_finale", MASTER_ROOT / "tutorial" / "triton-home-finale.png",
+        DERIVATIVE_ROOT / "tutorial" / "triton-home-finale.webp", (1089, 1444),
+        "WEBP", lossless=False, quality=90, resize=False,
+    ),
     ("branding", "tiburon"): IconSpec(
         "branding", "tiburon", MASTER_ROOT / "branding" / "tiburon.png",
         DERIVATIVE_ROOT / "branding" / "tiburon.webp", (512, 512), "WEBP",

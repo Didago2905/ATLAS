@@ -10,6 +10,76 @@
     z-index: 201;
 }
 
+.home-tutorial-epilogue-grid {
+    position: relative;
+    min-height: var(--home-epilogue-height, 60svh);
+}
+
+.home-tutorial-epilogue-grid > [inert] {
+    position: relative;
+    z-index: 0;
+}
+
+.home-tutorial-epilogue-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: rgba(0, 0, 0, 0.72);
+    opacity: 1;
+    transition: opacity 220ms ease;
+}
+
+.home-tutorial-epilogue-layer--closing {
+    opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .home-tutorial-epilogue-layer {
+        transition-duration: 1ms;
+    }
+}
+
+.home-tutorial-epilogue-stage {
+    position: sticky;
+    top: 0;
+    height: var(--home-epilogue-height, 60svh);
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+}
+
+.home-tutorial-epilogue-triton {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: min(72vw, 360px);
+    max-height: max(0px, calc(var(--home-epilogue-height, 60svh) - 24px));
+    object-fit: contain;
+    transform: translate(-5.85%, -7px) scale(0.85);
+    pointer-events: none;
+}
+
+.home-tutorial-epilogue-stage .home-tutorial-epilogue-dialogue {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--home-epilogue-dialogue-top, 12px) - var(--home-epilogue-triton-width, 280px) * 0.24 + 11px);
+    width: min(82vw, calc(100vw - 2 * max(16px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px))));
+    max-width: none;
+    height: auto;
+    transform: translateX(-50%);
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.35;
+    pointer-events: none;
+}
+
+.home-tutorial-epilogue-dialogue::before {
+    left: auto;
+    right: 12px;
+    top: auto;
+    bottom: -6px;
+}
+
 .home-tutorial-message {
     position: fixed;
     top: calc(env(safe-area-inset-top, 0px) + 8px);
@@ -38,6 +108,31 @@
     margin-right: clamp(-84px, -18vw, -57px);
     align-self: flex-start;
     pointer-events: none;
+}
+
+.home-tutorial-intro-character {
+    flex: 0 0 auto;
+    width: clamp(190px, 60vw, 280px);
+    margin-right: clamp(-84px, -18vw, -57px);
+}
+
+.home-tutorial-intro-character .home-tutorial-triton {
+    width: 100%;
+    margin-right: 0;
+}
+
+.home-tutorial-skip {
+    display: block;
+    min-height: 44px;
+    margin: 6px auto 0;
+    padding: 10px 12px;
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.8);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+    pointer-events: auto;
 }
 
 .home-tutorial-dialogue {
@@ -221,6 +316,24 @@
     right: auto;
 }
 
+.beerdetail-tutorial-message--home-return {
+    top: max(80px, calc(env(safe-area-inset-top) + 64px));
+    bottom: auto;
+}
+
+.beerdetail-tutorial-message--home-return .home-tutorial-dialogue {
+    top: calc(var(--details-triton-width) * 0.18);
+    bottom: auto;
+}
+
+.beerdetail-tutorial-message--home-return-await .home-tutorial-dialogue {
+    top: calc(var(--details-triton-width) * 0.18);
+}
+
+.beerdetail-tutorial-back--waiting {
+    text-shadow: 0 0 4px rgba(64, 224, 208, 0.95), 0 0 12px rgba(64, 224, 208, 0.8);
+}
+
 .beerdetail-tutorial-message--brewery-left .home-tutorial-triton {
     left: -5%;
     right: auto;
@@ -242,15 +355,17 @@
 .beerdetail-tutorial-message--brewery-left .beerdetail-tutorial-dialogue--brewery-reading {
     left: 0;
     right: auto;
-    bottom: calc(100% + 12px);
+    bottom: calc(100% + 18px);
     width: min(220px, calc(100vw - 32px));
 }
 
-.beerdetail-tutorial-dialogue--brewery-reading .beerdetail-tutorial-copy-next[aria-hidden="false"] {
+.beerdetail-tutorial-dialogue--brewery-reading .beerdetail-tutorial-copy-next[aria-hidden="false"],
+.beerdetail-tutorial-message--home-return .beerdetail-tutorial-copy-next[aria-hidden="false"] {
     position: relative;
 }
 
-.beerdetail-tutorial-dialogue--brewery-reading .beerdetail-tutorial-copy > div:first-child {
+.beerdetail-tutorial-dialogue--brewery-reading .beerdetail-tutorial-copy > div:first-child,
+.beerdetail-tutorial-message--home-return .beerdetail-tutorial-copy > div:first-child {
     display: none;
 }
 
@@ -296,6 +411,121 @@
 
 @media (prefers-reduced-motion: reduce) {
     .beerdetail-tutorial-copy > div { transition: none; }
+}
+
+.beerdetail-boundary-flash {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: min(56px, 15vw);
+    z-index: 202;
+    pointer-events: none;
+    background: linear-gradient(to right, rgba(64, 224, 208, 0.9), rgba(64, 224, 208, 0.35) 35%, rgba(64, 224, 208, 0));
+    opacity: 0;
+    animation: beerdetail-boundary-flash 350ms ease-in-out;
+}
+.beerdetail-boundary-flash--right {
+    left: auto;
+    right: 0;
+    transform: scaleX(-1);
+}
+@keyframes beerdetail-boundary-flash {
+    0%, 100% { opacity: 0; }
+    35%, 55% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .beerdetail-boundary-flash { animation: none; opacity: 0.85; }
+}
+
+.beerdetail-tutorial-finger {
+    position: absolute;
+    left: 50%;
+    top: 45%;
+    transform: translate(-50%, -50%);
+    width: clamp(52.8px, 14.4vw, 67.2px);
+    z-index: 202;
+    color: rgb(64, 224, 208);
+    pointer-events: none;
+}
+.beerdetail-tutorial-finger svg {
+    display: block;
+    width: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+.beerdetail-tutorial-finger-motion {
+    display: block;
+    position: relative;
+    pointer-events: none;
+}
+.beerdetail-tutorial-finger-motion.beerdetail-tutorial-hint--next { animation-name: beerdetail-finger-next; }
+.beerdetail-tutorial-finger-motion.beerdetail-tutorial-hint--prev { animation-name: beerdetail-finger-prev; }
+.beerdetail-tutorial-finger-motion.beerdetail-tutorial-hint--both { animation-name: beerdetail-finger-both; }
+.beerdetail-tutorial-finger-motion.beerdetail-tutorial-hint--up { animation-name: beerdetail-finger-up; }
+.beerdetail-tutorial-finger-motion.beerdetail-tutorial-hint--down { animation-name: beerdetail-finger-down; }
+@keyframes beerdetail-finger-next {
+    0%, 100% { translate: 0 0; }
+    50% { translate: -66px 0; }
+}
+@keyframes beerdetail-finger-prev {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 66px 0; }
+}
+@keyframes beerdetail-finger-up {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 -66px; }
+}
+@keyframes beerdetail-finger-down {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 66px; }
+}
+@keyframes beerdetail-finger-both {
+    0%, 50%, 100% { translate: 0 0; }
+    25% { translate: -33px 0; }
+    75% { translate: 33px 0; }
+}
+.beerdetail-tutorial-finger-motion::before,
+.beerdetail-tutorial-finger[data-direction="both"] .beerdetail-tutorial-finger-motion::after {
+    content: "";
+    position: absolute;
+    left: 39.0625%;
+    top: 16.25%;
+    width: 44px;
+    height: 6px;
+    margin-top: -3px;
+    border-radius: 50%;
+    background: linear-gradient(to right, rgba(64, 224, 208, 0.95), rgba(64, 224, 208, 0.35) 55%, rgba(64, 224, 208, 0));
+    transform-origin: left center;
+    opacity: 0;
+    pointer-events: none;
+    animation: beerdetail-finger-trail 600ms ease-in-out;
+}
+.beerdetail-tutorial-finger[data-direction="prev"] { --finger-trail-angle: 180deg; }
+.beerdetail-tutorial-finger[data-direction="up"] { --finger-trail-angle: 90deg; }
+.beerdetail-tutorial-finger[data-direction="down"] { --finger-trail-angle: -90deg; }
+.beerdetail-tutorial-finger[data-direction="both"] .beerdetail-tutorial-finger-motion::before {
+    animation-name: beerdetail-finger-trail-left;
+    animation-duration: 1200ms;
+}
+.beerdetail-tutorial-finger[data-direction="both"] .beerdetail-tutorial-finger-motion::after {
+    --finger-trail-angle: 180deg;
+    animation-name: beerdetail-finger-trail-right;
+    animation-duration: 1200ms;
+}
+@keyframes beerdetail-finger-trail {
+    0%, 100% { opacity: 0; transform: rotate(var(--finger-trail-angle, 0deg)) scaleX(0); }
+    35%, 65% { opacity: 1; transform: rotate(var(--finger-trail-angle, 0deg)) scaleX(1); }
+}
+@keyframes beerdetail-finger-trail-left {
+    0%, 50%, 100% { opacity: 0; transform: scaleX(0); }
+    17.5%, 32.5% { opacity: 1; transform: scaleX(1); }
+}
+@keyframes beerdetail-finger-trail-right {
+    0%, 50%, 100% { opacity: 0; transform: rotate(180deg) scaleX(0); }
+    67.5%, 82.5% { opacity: 1; transform: rotate(180deg) scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .beerdetail-tutorial-finger { display: none; }
 }
 
 .beerdetail-tutorial-hint--next { animation: beerdetail-hint-next 600ms ease-in-out; }
