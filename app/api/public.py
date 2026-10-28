@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional, List
-import json
-import os
 
 from app.core.database import get_db
 from app.models.beer import Beer
@@ -10,6 +8,7 @@ from app.schemas.beer import BeerResponse
 
 # 🔥 IMPORT DIRECTO (FIX)
 from app.services.beer_service import get_tap_beers
+from app.services.museum_upload_service import read_registry
 
 
 router = APIRouter(prefix="/public", tags=["Public"])
@@ -74,12 +73,4 @@ def get_tap(db: Session = Depends(get_db)):
 @router.get("/museum")
 def get_museum():
 
-    json_path = "data/museum.json"
-
-    if not os.path.exists(json_path):
-        return []
-
-    with open(json_path, "r") as f:
-        data = json.load(f)
-
-    return data
+    return read_registry()

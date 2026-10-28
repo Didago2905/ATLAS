@@ -3,7 +3,7 @@ import { createAnimation } from "../museum/animation";
 import { resolveArtworkNavigation } from "../museum/navigation";
 import { scrollStageTo } from "../museum/runtime";
 
-export default function BeerCoverV2({ beer, onClick, stageRef, visualScale = 1 }) {
+export default function BeerCoverV2({ beer, onClick, stageRef, visualScale = 1, frame = { width: 220, height: 300 }, onImageDimensions }) {
 
     const layoutRef = useRef(null);
     const visualRef = useRef(null);
@@ -12,7 +12,9 @@ export default function BeerCoverV2({ beer, onClick, stageRef, visualScale = 1 }
     const highlightRef = useRef(null);
 
     useEffect(() => {
-        let frame;
+        let frame = null;
+        let active = false;
+        let disposed = false;
 
         const animation = createAnimation({ baseScale: visualScale });
 
@@ -33,13 +35,49 @@ export default function BeerCoverV2({ beer, onClick, stageRef, visualScale = 1 }
                 highlight: highlightRef.current,
             });
 
-            frame = requestAnimationFrame(update);
         };
 
-        update();
+        const tick = () => {
+            frame = null;
+            if (!active || disposed) return;
+            update();
+            frame = requestAnimationFrame(tick);
+        };
 
-        return () => cancelAnimationFrame(frame);
-    }, [visualScale]);
+        const setActive = next => {
+            if (disposed || next === active) return;
+            active = next;
+            if (active) {
+                // Refresh frozen transforms immediately, before an incoming card is visible.
+                update();
+                frame = requestAnimationFrame(tick);
+            } else if (frame !== null) {
+                cancelAnimationFrame(frame);
+                frame = null;
+            }
+        };
+
+        const stage = stageRef.current;
+        const slot = layoutRef.current;
+        if (!stage || !slot) return;
+        // Observe the stable layout slot, not the animated visual. One viewport of
+        // overscan on each side lets returning cards settle before entering the stage.
+        const observer = new IntersectionObserver(entries => {
+            for (const entry of entries) setActive(entry.isIntersecting);
+        }, { root: stage, rootMargin: "0px 100% 0px 100%", threshold: 0 });
+        const bounds = stage.getBoundingClientRect();
+        const rect = slot.getBoundingClientRect();
+        setActive(rect.right >= bounds.left - bounds.width && rect.left <= bounds.right + bounds.width
+            && rect.bottom >= bounds.top && rect.top <= bounds.bottom);
+        observer.observe(slot);
+
+        return () => {
+            disposed = true;
+            active = false;
+            observer.disconnect();
+            if (frame !== null) cancelAnimationFrame(frame);
+        };
+    }, [visualScale, stageRef]);
 
     return (
         <div
@@ -87,10 +125,10 @@ export default function BeerCoverV2({ beer, onClick, stageRef, visualScale = 1 }
                 onClick && onClick();
             }}
             style={{
-                width: "220px",
-                minWidth: "220px",
-                height: "300px",
-                margin: "0 12px",
+                width: `${frame.width}px`,
+                minWidth: 0,
+                height: `${frame.height}px`,
+                flex: `0 0 ${frame.width}px`,
 
                 scrollSnapAlign: "center",
             }}
@@ -100,18 +138,21 @@ export default function BeerCoverV2({ beer, onClick, stageRef, visualScale = 1 }
                 data-atlas-museum-visual
                 data-atlas-museum-visual-scale={visualScale}
                 style={{
-                    width: "100%",
-                    height: "100%",
-                    borderRadius: "14px",
-                    overflow: "hidden",
-                    background: "#000",
+                    width: "calc(100% - 16px)",
+                    height: "calc(100% - 16px)",
+                    margin: "8px",
+                    borderRadius: 0,
+                    overflow: "visible",
+                    background: "transparent",
                     position: "relative",
+                    boxSizing: "border-box",
+                    padding: 0,
 
                     transform: "translateZ(0)",
                     transformOrigin: "center center",
                     backfaceVisibility: "hidden",
                     willChange: "transform",
-                    boxShadow: "0 12px 28px rgba(0,0,0,0.55)",
+                    boxShadow: "none",
                     transition: "opacity 0.2s ease",
                 }}
             >
@@ -121,11 +162,13 @@ export default function BeerCoverV2({ beer, onClick, stageRef, visualScale = 1 }
                         src={beer.image_url}
                         alt={beer.name}
                         draggable={false}
+                        onLoad={event => onImageDimensions?.(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)}
                         style={{
                             width: "100%",
                             height: "100%",
-                            objectFit: "cover",
-                            objectPosition: "center 20%",
+                            display: "block",
+                            objectFit: "contain",
+                            objectPosition: "center",
 
                             filter: "blur(0px)",
 

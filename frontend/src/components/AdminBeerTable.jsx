@@ -1,3 +1,4 @@
+import { uploadTapImage, tapUploadMessage } from "../api/upload";
 import { colorLabelMap } from "../utils/colorUtils";
 import { updateBeer } from "../api/beers";
 import { useState, useEffect } from "react";
@@ -38,56 +39,28 @@ export default function AdminBeerTable({ beers, token, refresh, onEdit }) {
         }
     };
 
-    // 🟠 FASE 1 → preview inmediato
+    const [uploadingImages, setUploadingImages] = useState({});
     const handleImageUpload = async (e, beer) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // preview inmediato
-        const imageUrl = URL.createObjectURL(file);
-
-        const updated = localBeers.map(b =>
-            b.id === beer.id ? { ...b, image_url: imageUrl } : b
-        );
-
-        setLocalBeers(updated);
-
-        // 🔥 upload real
-        const formData = new FormData();
-        formData.append("file", file);
-
+        const input = e.target;
+        const file = input.files[0];
+        if (!file || uploadingImages[beer.id]) return;
+        setUploadingImages(prev => ({ ...prev, [beer.id]: true }));
         try {
-            await fetch(`/api/admin/beers/${beer.id}/upload-image`, {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${token}`
-                },
-                body: formData
-            });
-
-            await refresh(); // 🔥 recarga desde DB
+            const data = await uploadTapImage(beer.id, file, token);
+            setLocalBeers(prev => prev.map(b => b.id === beer.id
+                ? { ...b, image_url: data.image_url } : b));
+            alert(tapUploadMessage(data));
+            try {
+                await refresh();
+            } catch (refreshError) {
+                console.error(refreshError);
+                alert("La imagen se publicó en ambos destinos, pero falló la actualización de la vista. Recarga la página.");
+            }
         } catch (err) {
-            console.error("UPLOAD ERROR:", err);
-        }
-    };
-
-    // 🟣 FASE 2 → preparado para backend
-    const handleSaveImage = async (beer, file) => {
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
-
-            await fetch(`/api/admin/beers/${beer.id}/upload-image`, {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${token}`
-                },
-                body: formData
-            });
-
-            await refresh();
-        } catch (err) {
-            console.error("UPLOAD ERROR:", err);
+            alert(err.message || "No se pudo publicar la imagen");
+        } finally {
+            input.value = "";
+            setUploadingImages(prev => ({ ...prev, [beer.id]: false }));
         }
     };
 
@@ -139,6 +112,7 @@ export default function AdminBeerTable({ beers, token, refresh, onEdit }) {
                         <input
                             type="file"
                             accept="image/*"
+                            disabled={Boolean(uploadingImages[beer.id])}
                             onChange={(e) => handleImageUpload(e, beer)}
                             style={{ display: "none" }}
                             id={`file-${beer.id}`}
@@ -246,6 +220,7 @@ export default function AdminBeerTable({ beers, token, refresh, onEdit }) {
                                 <input
                                     type="file"
                                     accept="image/*"
+                                    disabled={Boolean(uploadingImages[beer.id])}
                                     onChange={(e) => handleImageUpload(e, beer)}
                                     style={{ display: "none" }}
                                     id={`file-${beer.id}`}

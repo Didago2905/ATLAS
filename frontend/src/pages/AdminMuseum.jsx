@@ -4,7 +4,7 @@ import { uploadImage } from "../api/upload";
 export default function AdminMuseum() {
 
     const [file, setFile] = useState(null);
-    const [type, setType] = useState("fichas/antiguas");
+    const [type, setType] = useState("carta_vieja");
     const [preview, setPreview] = useState(null);
     const [loading, setLoading] = useState(false);
 
@@ -46,7 +46,7 @@ export default function AdminMuseum() {
                 year,
             });
 
-            alert("✅ Imagen subida correctamente");
+            alert(res.historical_created ? "✅ Obra histórica archivada" : "✅ Esta obra ya estaba archivada; sin duplicados");
             console.log("🖼 URL:", res.image_url);
 
             // reset
@@ -59,7 +59,7 @@ export default function AdminMuseum() {
 
         } catch (err) {
             console.error(err);
-            alert("❌ Error al subir imagen");
+            alert(err.message || "❌ Error al archivar la imagen");
         } finally {
             setLoading(false);
         }
@@ -73,13 +73,22 @@ export default function AdminMuseum() {
             {/* 🔽 selector tipo */}
             <div style={{ marginBottom: "15px" }}>
                 <select
+                    aria-label="Colección histórica"
                     value={type}
                     onChange={(e) => setType(e.target.value)}
                 >
-                    <option value="fichas/antiguas">Fichas Antiguas</option>
-                    <option value="fichas/actuales">Fichas Actuales</option>
-                    <option value="tap">Tap</option>
-                    <option value="botellas">Botellas</option>
+                    <option value="tap_list">Tablas</option>
+                    <option value="carta_vieja">Cartas Viejas</option>
+                    <option value="carta_nueva">Cartas Nuevas</option>
+                    <option value="etiquetas">Etiquetas</option>
+                    <optgroup label="Categorías anteriores compatibles">
+                        <option value="fichas/antiguas">Fichas Antiguas</option>
+                        <option value="fichas/actuales">Fichas Actuales</option>
+                        <option value="tap">Tap</option>
+                        <option value="botellas">Botellas</option>
+                    </optgroup>
+                    <option value="packaging">Packaging</option>
+                    <option value="otros">Otros archivos históricos aprobados</option>
                 </select>
             </div>
 

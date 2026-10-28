@@ -15,7 +15,7 @@ from app.schemas.beer import (
     BeerUpdate,
     BeerAvailabilityUpdate,
 )
-from app.services import beer_service
+from app.services import beer_service, museum_upload_service
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -129,45 +129,15 @@ def upload_beer_image(
     _=Depends(verify_token),
 ):
 
-    # 📁 carpeta destino
-    folder = "frontend/public/images/beerTablesTapList"
-    os.makedirs(folder, exist_ok=True)
-
-    file_path = f"{folder}/{beer_id}.jpg"
-
-    # 🔥 abrir imagen con PIL
-    try:
-        img = Image.open(file.file)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image file")
-
-    # 🔥 convertir a RGB (evita errores con PNG / transparencias)
-    img = img.convert("RGB")
-
-    # 🔥 resize inteligente (mantiene proporción)
-    img.thumbnail((600, 800))
-
-    # 🔥 guardar optimizado
-    img.save(
-        file_path,
-        format="JPEG",
-        quality=75,
-        optimize=True,
-        progressive=True,  # 🔥 carga progresiva (pro)
-    )
-
-    # 🌐 ruta pública
-    image_url = f"/images/beerTablesTapList/{beer_id}.jpg"
-
-    # 💾 guardar en DB
-    beer = db.query(Beer).get(beer_id)
-    if not beer:
+    beer = db.get(Beer, beer_id)
+    if beer is None or beer.is_deleted:
         raise HTTPException(status_code=404, detail="Beer not found")
-
-    beer.image_url = image_url
-    db.commit()
-
-    return {"image_url": image_url}
+    return museum_upload_service.upload_artwork(
+        file, "tap", {
+            "name": beer.name, "style": beer.style,
+            "abv": str(beer.abv) if beer.abv is not None else "", "year": "",
+        }, beer=beer, db=db,
+    )
 
 
 CARD_BACKGROUND_TARGET_SIZE = (1080, 1920)
@@ -266,40 +236,7 @@ def upload_museum_image(
     _=Depends(verify_token),
 ):
 
-    # 📁 ruta base
-    base_folder = "static/museum"
-    folder = os.path.join(base_folder, type)
-
-    os.makedirs(folder, exist_ok=True)
-
-    # 🔥 nombre archivo limpio
-    name = os.path.splitext(file.filename)[0]
-    filename = name.lower().replace(" ", "_") + ".jpg"
-    file_path = os.path.join(folder, filename)
-
-    # 🔥 abrir imagen
-    try:
-        img = Image.open(file.file)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image file")
-
-    # 🔥 convertir a RGB
-    img = img.convert("RGB")
-
-    # 🔥 resize inteligente
-    img.thumbnail((800, 1000))
-
-    # 🔥 guardar optimizado
-    img.save(file_path, format="JPEG", quality=75, optimize=True, progressive=True)
-
-    # 🌐 URL pública
-    image_url = f"/static/museum/{type}/{filename}"
-
-    return {"image_url": image_url}
-
-
-import json
-from uuid import uuid4
+    return museum_upload_service.upload_artwork(file, type, register=False)
 
 
 @router.post("/museum")
@@ -316,52 +253,6 @@ def upload_museum(
     _=Depends(verify_token),
 ):
 
-    # 📁 carpeta base
-    base_folder = "static/museum"
-    folder = os.path.join(base_folder, type)
-    os.makedirs(folder, exist_ok=True)
-
-    # 🔥 nombre limpio
-    name_clean = os.path.splitext(file.filename)[0]
-    filename = f"{name_clean.lower().replace(' ', '_')}.jpg"
-    file_path = os.path.join(folder, filename)
-
-    # 🖼 procesar imagen
-    try:
-        img = Image.open(file.file).convert("RGB")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image file")
-
-    img.thumbnail((800, 1000))
-
-    img.save(file_path, format="JPEG", quality=75, optimize=True, progressive=True)
-
-    image_url = f"/static/museum/{type}/{filename}"
-
-    # 📁 JSON PATH
-    json_path = "data/museum.json"
-
-    if not os.path.exists(json_path):
-        with open(json_path, "w") as f:
-            json.dump([], f)
-
-    with open(json_path, "r") as f:
-        data = json.load(f)
-
-    # 🔥 nuevo objeto
-    new_item = {
-        "id": str(uuid4()),
-        "name": name,
-        "style": style,
-        "abv": abv,
-        "year": year,
-        "type": type,
-        "image_url": image_url,
-    }
-
-    data.append(new_item)
-
-    with open(json_path, "w") as f:
-        json.dump(data, f, indent=2)
-
-    return new_item
+    return museum_upload_service.upload_artwork(
+        file, type, {"name": name, "style": style, "abv": abv, "year": year},
+    )

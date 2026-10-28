@@ -32,6 +32,8 @@ export const ENGINE_NAME = "Navigation";
 export const MUSEUM_MODES = {
     FICHAS: "fichas",
     TAP: "tap",
+    CARTAS_NUEVAS: "carta_nueva",
+    ETIQUETAS: "etiquetas",
 };
 
 /**

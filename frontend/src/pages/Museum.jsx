@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import useCatalogSession from "../catalog/useCatalogSession";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import BeerCoverV2 from "../components/BeerCoverV2";
 import DismissibleArtworkOverlay from "../museum/presentation/DismissibleArtworkOverlay";
 import { readBackgroundPreference } from "../backgrounds";
@@ -22,8 +21,20 @@ import {
     getViewport,
 } from "../museum/viewport";
 
+const COLLECTIONS = [
+    { mode: MUSEUM_MODES.TAP, category: "tap_list", label: "Tablas", icon: "▦", fallbackRatio: 220 / 300, maxWidth: 220 },
+    { mode: MUSEUM_MODES.FICHAS, category: "carta_vieja", label: "Cartas Viejas", icon: "▭", fallbackRatio: 220 / 300, maxWidth: 600 },
+    { mode: MUSEUM_MODES.CARTAS_NUEVAS, category: "carta_nueva", label: "Cartas Nuevas", icon: "▤", fallbackRatio: 16 / 9, maxWidth: 600 },
+    { mode: MUSEUM_MODES.ETIQUETAS, category: "etiquetas", label: "Etiquetas", icon: "◇", fallbackRatio: 4 / 3, maxWidth: 600 },
+];
+const LEGACY_CATEGORIES = {
+    "fichas/antiguas": "carta_vieja",
+    "fichas/actuales": "carta_nueva",
+    tap: "tap_list",
+    botellas: "etiquetas",
+};
+
 export default function Museum() {
-    const { beers } = useCatalogSession();
     const museumProbe = window.__ATLAS_MUSEUM_PROBE__ === true;
 
     const logMuseumQa = (...args) => {
@@ -38,6 +49,8 @@ export default function Museum() {
         MUSEUM_MODES.FICHAS
     );
     const [museumData, setMuseumData] = useState([]);
+    const [museumLoading, setMuseumLoading] = useState(true);
+    const [museumError, setMuseumError] = useState("");
     const [activeItem, setActiveItem] = useState(null);
     const [probeSnapshot, setProbeSnapshot] = useState(null);
 
@@ -58,9 +71,11 @@ export default function Museum() {
     const [selectedBackground] = useState(readBackgroundPreference);
 
     const containerRef = useRef(null);
+    const centeredCardRef = useRef(null);
+    const geometryModeRef = useRef(mode);
+    const [imageRatios, setImageRatios] = useState({});
+    const [viewportHeight, setViewportHeight] = useState(() => readViewportDimensions().height);
 
-    // 🔥 scroll state
-    const [scrollLeft, setScrollLeft] = useState(0);
     const [containerWidth, setContainerWidth] = useState(0);
 
     const [isLandscape, setIsLandscape] = useState(
@@ -145,7 +160,7 @@ export default function Museum() {
         requestAnimationFrame(init);
 
         const handleScroll = () => {
-            setScrollLeft(container.scrollLeft);
+            centeredCardRef.current = getNearestCardNode()?.dataset.atlasMuseumCardId ?? null;
 
             if (museumProbe) {
                 console.log("[MUSEUM_QA][SCROLL]", {
@@ -163,6 +178,7 @@ export default function Museum() {
             if (width !== 0) {
                 setContainerWidth(width);
             }
+            setViewportHeight(readViewportDimensions().height);
         };
 
         logMuseumQa("Scroll listener attached");
@@ -343,10 +359,26 @@ export default function Museum() {
     }, [museumProbe, mode, isLandscape]);
 
     useEffect(() => {
-        fetch("/api/public/museum")
-            .then(res => res.json())
-            .then(data => setMuseumData(data))
-            .catch(err => console.error("Museum fetch error:", err));
+        const controller = new AbortController();
+        fetch("/api/public/museum", { signal: controller.signal })
+            .then(res => {
+                if (!res.ok) throw new Error(`Museum HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                if (!Array.isArray(data)) throw new Error("Invalid Museum archive");
+                if (!controller.signal.aborted) setMuseumData(data);
+            })
+            .catch(err => {
+                if (!controller.signal.aborted) {
+                    console.error("Museum fetch error:", err);
+                    setMuseumError("No se pudo cargar el archivo del Museo.");
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setMuseumLoading(false);
+            });
+        return () => controller.abort();
     }, []);
 
     // 🔥 fade UI (igual)
@@ -375,32 +407,49 @@ export default function Museum() {
 
     const exhibitionArtworks = createExhibition(artworks);
 
-    let data = [];
+    const collection = COLLECTIONS.find(item => item.mode === mode);
+    const data = exhibitionArtworks.filter(item => {
+        const category = item?.category ?? LEGACY_CATEGORIES[item?.type] ?? item?.type;
+        return category === collection.category;
+    });
 
-    if (mode === MUSEUM_MODES.FICHAS) {
-        data = exhibitionArtworks.filter(
-            item => item.type === "fichas/antiguas"
-        );
-    }
+    const stageWidth = containerWidth || readViewportDimensions().width;
+    const maxHeight = Math.max(1, Math.min(300, viewportHeight - (isLandscape ? 32 : 176)));
+    const maxWidth = Math.max(1, Math.min(collection.maxWidth, stageWidth - (isLandscape ? 192 : 48)));
+    const gap = isLandscape ? 64 : 52; // Includes the previous 12px margins on both cards.
+    const paddingLeft = isLandscape ? 80 : 10;
+    const paddingRight = 10;
+    const frames = data.map(item => {
+        const width = Number(item.manifest_metadata?.width ?? item.width);
+        const height = Number(item.manifest_metadata?.height ?? item.height);
+        const metadataRatio = width > 0 && height > 0 && Number.isFinite(width / height) ? width / height : null;
+        const ratio = imageRatios[item.id] ?? metadataRatio ?? collection.fallbackRatio;
+        // Fit the image's content box, then add the same 8px safety margin on every side.
+        // Applying the aspect ratio to the outer padded frame would introduce letterboxing.
+        const imageWidth = Math.min(Math.max(1, maxWidth - 16), Math.max(1, maxHeight - 16) * ratio);
+        return { width: imageWidth + 16, height: imageWidth / ratio + 16 };
+    });
+    const edgeStart = Math.max(0, (stageWidth - (frames[0]?.width ?? 0)) / 2 - paddingLeft - gap) + 2;
+    const edgeEnd = Math.max(0, (stageWidth - (frames.at(-1)?.width ?? 0)) / 2 - paddingRight - gap) + 2;
+    const geometryKey = data.map((item, i) => `${item.id}:${frames[i].width}:${frames[i].height}`).join("|");
 
-    if (mode === MUSEUM_MODES.TAP) {
-        data = beers;
-    }
+    useLayoutEffect(() => {
+        const stage = containerRef.current;
+        const cards = [...stage.querySelectorAll("[data-atlas-museum-card]")];
+        const previousId = geometryModeRef.current === mode ? centeredCardRef.current : null;
+        const card = cards.find(node => node.dataset.atlasMuseumCardId === previousId) ?? cards[0];
+        geometryModeRef.current = mode;
+        if (!card) return;
+        // Size changes must preserve the centered artwork, including late legacy image loads.
+        stage.scrollTo({ left: card.offsetLeft + card.offsetWidth / 2 - stage.clientWidth / 2, behavior: "instant" });
+        centeredCardRef.current = card.dataset.atlasMuseumCardId;
+    }, [geometryKey, mode, stageWidth]);
 
-    const edgeSpacer = isLandscape
-        ? "calc(50vw - 120px)"
-        : "calc(50vw - 150px)";
-
-    if (!data.length) {
-        return (
-            <div
-                style={{
-                    height: "100dvh",
-                    background: selectedBackground.value,
-                }}
-            />
-        );
-    }
+    const rememberImageRatio = (item, width, height) => {
+        if (!(width > 0 && height > 0)) return;
+        const ratio = width / height;
+        setImageRatios(previous => previous[item.id] === ratio ? previous : { ...previous, [item.id]: ratio });
+    };
 
     return (
         <>
@@ -571,51 +620,53 @@ export default function Museum() {
                         transition: "opacity 0.25s ease",
                     }}
                 >
-                    <button
-                        onClick={() => {
-                            setMode(
-                                selectMuseumMode(
-                                    MUSEUM_MODES.FICHAS
-                                )
-                            );
-                        }}
-                        style={{
-                            padding: "10px",
-                            borderRadius: "50%",
-                            border: "1px solid #333",
-                            background: mode === MUSEUM_MODES.FICHAS ? "#fff" : "#111",
-                            color: mode === MUSEUM_MODES.FICHAS ? "#000" : "#fff",
-                            cursor: "pointer",
-                            width: "44px",
-                            height: "44px",
-                        }}
-                    >
-                        ▭
-                    </button>
-
-                    <button
-                        onClick={() => {
-                            setMode(
-                                selectMuseumMode(
-                                    MUSEUM_MODES.TAP
-                                )
-                            );
-                        }}
-                        style={{
-                            padding: "10px",
-                            borderRadius: "50%",
-                            border: "1px solid #333",
-                            background: mode === MUSEUM_MODES.TAP ? "#fff" : "#111",
-                            color: mode === MUSEUM_MODES.TAP ? "#000" : "#fff",
-                            cursor: "pointer",
-                            width: "44px",
-                            height: "44px",
-                        }}
-                    >
-                        ▦
-                    </button>
+                    {COLLECTIONS.map(item => (
+                        <button
+                            key={item.category}
+                            type="button"
+                            aria-label={item.label}
+                            title={item.label}
+                            aria-pressed={mode === item.mode}
+                            onClick={() => {
+                                if (mode === item.mode) return;
+                                requestCloseArtwork();
+                                setMode(selectMuseumMode(item.mode));
+                            }}
+                            style={{
+                                padding: "10px",
+                                borderRadius: "50%",
+                                border: "1px solid #333",
+                                background: mode === item.mode ? "#fff" : "#111",
+                                color: mode === item.mode ? "#000" : "#fff",
+                                cursor: "pointer",
+                                width: "44px",
+                                height: "44px",
+                            }}
+                        >
+                            {item.icon}
+                        </button>
+                    ))}
 
                 </div>
+
+                {!data.length && (
+                    <p
+                        role={museumError ? "alert" : "status"}
+                        style={{
+                            position: "absolute",
+                            inset: "0 24px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            textAlign: "center",
+                            color: "#fff",
+                            textShadow: "0 1px 3px #000",
+                            pointerEvents: "none",
+                        }}
+                    >
+                        {museumLoading ? "Cargando archivo…" : museumError || "Esta colección todavía no tiene obras."}
+                    </p>
+                )}
 
                 <div
                     data-atlas-museum-track
@@ -625,25 +676,25 @@ export default function Museum() {
                         width: "max-content",
                         minWidth: "100%",
                         height: "100%",
-                        gap: isLandscape ? "40px" : "28px",
-                        padding: isLandscape ? "0 10px 0 80px" : "0 10px",
+                        gap: `${gap}px`,
+                        padding: `0 ${paddingRight}px 0 ${paddingLeft}px`,
                     }}
                 >
                     <div
                         style={{
-                            minWidth: edgeSpacer,
-                            flex: `0 0 ${edgeSpacer}`,
+                            flex: `0 0 ${edgeStart}px`,
+                            minWidth: `${edgeStart}px`,
                         }}
                     />
 
-                    {data.map((item) => (
+                    {data.map((item, index) => (
                         <BeerCoverV2
                             key={item.id}
                             beer={item}
                             stageRef={containerRef}
+                            frame={frames[index]}
+                            onImageDimensions={(width, height) => rememberImageRatio(item, width, height)}
                             visualScale={isLandscape ? 0.95 : 1}
-                            scrollLeft={scrollLeft}
-                            containerWidth={containerWidth}
                             onClick={() => {
                                 const selectedArtwork =
                                     selectionRef.current.selectArtwork(item);
@@ -658,8 +709,8 @@ export default function Museum() {
 
                     <div
                         style={{
-                            minWidth: edgeSpacer,
-                            flex: `0 0 ${edgeSpacer}`,
+                            flex: `0 0 ${edgeEnd}px`,
+                            minWidth: `${edgeEnd}px`,
                         }}
                     />
                 </div>

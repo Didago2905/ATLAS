@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { uploadBeerCardBackground } from "../api/beers"
+import { uploadTapImage, tapUploadMessage } from "../api/upload"
 
 const sectionTitleStyle = {
     marginTop: "18px",
@@ -136,39 +137,25 @@ export default function BeerEditModal({
         const file = e.target.files[0]
         if (!file || !beerId) return
 
-        const previewUrl = URL.createObjectURL(file)
-        setForm((prev) => ({ ...prev, image_url: previewUrl }))
         setUploadingTap(true)
-
-        const formData = new FormData()
-        formData.append("file", file)
+        const input = e.target
 
         try {
-            const res = await fetch(`/api/admin/beers/${beerId}/upload-image`, {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem("token")}`,
-                },
-                body: formData,
-            })
-
-            if (res.status === 401) {
-                localStorage.removeItem("token")
-                window.location.href = "/login"
-                return
-            }
-
-            if (!res.ok) throw new Error("Tap image upload failed")
-
-            const data = await res.json()
+            const data = await uploadTapImage(beerId, file)
             setForm((prev) => ({ ...prev, image_url: data.image_url }))
-            await onAssetsUpdated?.()
+            alert(tapUploadMessage(data))
+            try {
+                await onAssetsUpdated?.()
+            } catch (refreshError) {
+                console.error(refreshError)
+                alert("La imagen se publicó en ambos destinos, pero falló la actualización de la vista. Recarga la página.")
+            }
         } catch (err) {
             console.error(err)
-            alert("Error uploading tap image")
+            alert(err.message || "No se pudo publicar la imagen")
         } finally {
             setUploadingTap(false)
-            e.target.value = ""
+            input.value = ""
         }
     }
 
@@ -384,7 +371,7 @@ export default function BeerEditModal({
                 )}
 
                 <div className="modal-buttons">
-                    <button onClick={handleSubmit}>Save</button>
+                    <button onClick={handleSubmit} disabled={uploadingTap}>Save</button>
                     <button onClick={onClose}>Cancel</button>
                 </div>
 
