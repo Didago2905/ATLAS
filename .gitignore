@@ -50,3 +50,5 @@ frontend/browserstack.yml
 frontend/log/
 frontend/tests/results/
 static/**/test.txt
+/data/museum/masters/
+/data/.museum-upload.lock
