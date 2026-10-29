@@ -73,4 +73,4 @@ def get_tap(db: Session = Depends(get_db)):
 @router.get("/museum")
 def get_museum():
 
-    return read_registry()
+    return [item for item in read_registry() if item.get("published") is not False]
