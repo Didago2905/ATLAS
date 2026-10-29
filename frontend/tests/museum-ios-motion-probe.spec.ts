@@ -336,6 +336,40 @@ async function performHorizontalGesture(page: Page, options: GestureOptions) {
     const y = box.y + box.height * 0.58;
     const steps = options.steps ?? 8;
 
+    await stage.evaluate(element => {
+        const events: Array<{
+            type: string;
+            isTrusted: boolean;
+            timestamp: number;
+            x: number | null;
+            y: number | null;
+        }> = [];
+        const scrollLeftBefore = element.scrollLeft;
+        const types = ["touchstart", "touchmove", "touchend"];
+        const listener = (event: Event) => {
+            const touchEvent = event as TouchEvent;
+            const touch = touchEvent.changedTouches[0] || touchEvent.touches[0];
+            events.push({
+                type: event.type,
+                isTrusted: event.isTrusted,
+                timestamp: event.timeStamp,
+                x: touch?.clientX ?? null,
+                y: touch?.clientY ?? null,
+            });
+        };
+        types.forEach(type => element.addEventListener(type, listener, { passive: true }));
+
+        (window as any).__ATLAS_MUSEUM_GESTURE_CAPTURE__ = {
+            events,
+            stage: element,
+            scrollLeftBefore,
+            types,
+            listener,
+        };
+    });
+    let evidence;
+    let limitation: string | undefined;
+
     try {
         await page.mouse.move(startX, y);
         await page.mouse.down();
@@ -350,28 +384,55 @@ async function performHorizontalGesture(page: Page, options: GestureOptions) {
         }
 
         await page.mouse.up();
-
-        return {
-            supported: true,
-            requestedDisplacement: endX - startX,
-            durationMs: options.durationMs,
-            steps,
-            startX,
-            endX,
-            y,
-        };
     } catch (error) {
-        return {
-            supported: false,
-            requestedDisplacement: endX - startX,
-            durationMs: options.durationMs,
-            steps,
-            startX,
-            endX,
-            y,
-            limitation: error instanceof Error ? error.message : String(error),
-        };
+        limitation = error instanceof Error ? error.message : String(error);
+    } finally {
+        evidence = await page.evaluate(() => {
+            const recording = (window as any).__ATLAS_MUSEUM_GESTURE_CAPTURE__;
+            try {
+                if (!recording) {
+                    return {
+                        events: [],
+                        scrollLeftBefore: null,
+                        scrollLeftAfter: null,
+                        error: "Temporary gesture recorder was not available at finalization",
+                    };
+                }
+                return {
+                    events: recording.events,
+                    scrollLeftBefore: recording.scrollLeftBefore,
+                    scrollLeftAfter: recording.stage.scrollLeft,
+                };
+            } finally {
+                try {
+                    if (recording) {
+                        recording.types.forEach((type: string) =>
+                            recording.stage.removeEventListener(type, recording.listener)
+                        );
+                    }
+                } finally {
+                    delete (window as any).__ATLAS_MUSEUM_GESTURE_CAPTURE__;
+                }
+            }
+        });
     }
+
+    return {
+        supported: limitation === undefined &&
+            ["touchstart", "touchmove", "touchend"].every(type =>
+                evidence.events.some(event => event.type === type)
+            ) &&
+            evidence.events.every(event => event.isTrusted) &&
+            Math.abs(evidence.scrollLeftAfter - evidence.scrollLeftBefore) > 0,
+        requestedDisplacement: endX - startX,
+        durationMs: options.durationMs,
+        steps,
+        startX,
+        endX,
+        y,
+        evidence,
+        ...(limitation === undefined ? {} : { limitation }),
+    };
 }
 
 async function positionForOffCenterTap(page: Page) {
@@ -412,7 +473,10 @@ async function positionForOffCenterTap(page: Page) {
 test("ATLAS Museum iOS motion probe diagnostics", async ({ page }) => {
     test.setTimeout(6 * 60_000);
 
-    await page.goto("/museum?motionProbe=1");
+    const probeBaseUrl = process.env.ATLAS_MUSEUM_PROBE_BASE_URL;
+    await page.goto(probeBaseUrl
+        ? new URL("/museum?motionProbe=1", probeBaseUrl).href
+        : "/museum?motionProbe=1");
     const stage = page.locator(stageSelector);
     await expect(stage).toBeVisible();
     await waitForProbe(page);
