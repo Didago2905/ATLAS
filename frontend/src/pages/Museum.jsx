@@ -1,4 +1,5 @@
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import BeerCoverV2 from "../components/BeerCoverV2";
 import DismissibleArtworkOverlay from "../museum/presentation/DismissibleArtworkOverlay";
 import { readBackgroundPreference } from "../backgrounds";
@@ -35,6 +36,7 @@ const LEGACY_CATEGORIES = {
 };
 
 export default function Museum() {
+    const navigate = useNavigate();
     const museumProbe = window.__ATLAS_MUSEUM_PROBE__ === true;
 
     const logMuseumQa = (...args) => {
@@ -53,6 +55,69 @@ export default function Museum() {
     const [museumError, setMuseumError] = useState("");
     const [activeItem, setActiveItem] = useState(null);
     const [probeSnapshot, setProbeSnapshot] = useState(null);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    const [ordering, setOrdering] = useState("original");
+    const [styleFilter, setStyleFilter] = useState("");
+    const [breweryFilter, setBreweryFilter] = useState("");
+    const searchTriggerRef = useRef(null);
+    const searchPanelRef = useRef(null);
+    const searchInputRef = useRef(null);
+    const keyboardViewportRef = useRef(null);
+    const [panelViewport, setPanelViewport] = useState(() => ({
+        height: window.visualViewport?.height || window.innerHeight,
+        offsetTop: window.visualViewport?.offsetTop || 0,
+    }));
+
+    const closeSearch = (returnFocus = true) => {
+        searchInputRef.current?.blur();
+        setSearchOpen(false);
+        if (returnFocus) searchTriggerRef.current?.focus({ preventScroll: true });
+    };
+    const clearFilters = () => {
+        setQuery("");
+        setOrdering("original");
+        setStyleFilter("");
+        setBreweryFilter("");
+    };
+    const normalizeSearch = value => (typeof value === "string" ? value : "")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es").trim();
+    const collator = useMemo(() => new Intl.Collator("es", { sensitivity: "base", numeric: true }), []);
+    const searchIndex = useMemo(() => new Map(museumData.map(item => {
+        let products = [];
+        try {
+            const parsed = typeof item.semantic_products === "string"
+                ? JSON.parse(item.semantic_products) : item.semantic_products;
+            if (Array.isArray(parsed)) products = parsed.filter(p => p && typeof p === "object" && !Array.isArray(p));
+        } catch { /* A malformed semantic record must not hide its artwork. */ }
+        const value = field => typeof field?.value === "string" ? field.value.trim() : "";
+        const confirmed = field => field?.confidence === "confirmed" ? value(field) : "";
+        const indexedProducts = products.map(product => ({
+            name: value(product.beer_name),
+            style: value(product.beer_style),
+            brewery: confirmed(product.brewery),
+            origin: confirmed(product.brewery_origin),
+        }));
+        if (!indexedProducts.length && typeof item.style === "string" && item.style.trim()) {
+            indexedProducts.push({ name: "", style: item.style.trim(), brewery: "", origin: "" });
+        }
+        return [item.id, {
+            products: indexedProducts.map(p => ({ ...p, styleKey: normalizeSearch(p.style), breweryKey: normalizeSearch(p.brewery) })),
+            text: normalizeSearch([item.name, item.style,
+                ...indexedProducts.flatMap(p => [p.name, p.style, p.brewery, p.origin])].filter(v => typeof v === "string").join(" ")),
+        }];
+    })), [museumData]);
+
+    // Keyboard height changes must not rotate/reframe the coverflow. Width changes
+    // still permit genuine orientation/layout changes; height restores on resize.
+    const readGeometryViewport = () => {
+        const dimensions = readViewportDimensions();
+        const saved = keyboardViewportRef.current;
+        if (saved && dimensions.width === saved.width
+            && (document.activeElement === searchInputRef.current || dimensions.height < saved.height - 80)) return null;
+        keyboardViewportRef.current = null;
+        return dimensions;
+    };
 
     const selectionRef = useRef(null);
 
@@ -174,11 +239,13 @@ export default function Museum() {
         };
 
         const handleResize = () => {
+            const dimensions = readGeometryViewport();
+            if (!dimensions) return;
             const width = getStageDimensions(measureStageWidth(container)).width;
             if (width !== 0) {
                 setContainerWidth(width);
             }
-            setViewportHeight(readViewportDimensions().height);
+            setViewportHeight(dimensions.height);
         };
 
         logMuseumQa("Scroll listener attached");
@@ -309,7 +376,8 @@ export default function Museum() {
 
     useEffect(() => {
         const handleResize = () => {
-            setIsLandscape(getViewport(readViewportDimensions()).isLandscape);
+            const dimensions = readGeometryViewport();
+            if (dimensions) setIsLandscape(getViewport(dimensions).isLandscape);
         };
 
         const stopObservingResize =
@@ -381,11 +449,13 @@ export default function Museum() {
         return () => controller.abort();
     }, []);
 
-    // 🔥 fade UI (igual)
+    // One existing auto-hide timer owns all navigation controls.
     useEffect(() => {
         let timeout;
+        if (searchOpen) showControls(setShowUI);
 
         const hideUI = () => {
+            if (searchOpen) return;
             hideControls(setShowUI);
 
             clearTimeout(timeout);
@@ -398,22 +468,81 @@ export default function Museum() {
         window.addEventListener("touchmove", hideUI, { passive: true });
 
         return () => {
+            clearTimeout(timeout);
             window.removeEventListener("scroll", hideUI);
             window.removeEventListener("touchmove", hideUI);
         };
-    }, []);
+    }, [searchOpen]);
 
-    const artworks = createArchive(museumData);
+    useEffect(() => {
+        if (!searchOpen) return;
+        const outside = event => {
+            if (!searchPanelRef.current?.contains(event.target)
+                && !searchTriggerRef.current?.contains(event.target)) closeSearch(false);
+        };
+        const escape = event => {
+            if (event.key === "Escape") { event.preventDefault(); closeSearch(); }
+        };
+        const resize = () => {
+            const next = { height: window.visualViewport?.height || window.innerHeight, offsetTop: window.visualViewport?.offsetTop || 0 };
+            setPanelViewport(previous => previous.height === next.height && previous.offsetTop === next.offsetTop ? previous : next);
+        };
+        resize();
+        document.addEventListener("pointerdown", outside);
+        document.addEventListener("keydown", escape);
+        window.addEventListener("resize", resize);
+        window.visualViewport?.addEventListener("resize", resize);
+        window.visualViewport?.addEventListener("scroll", resize);
+        return () => {
+            document.removeEventListener("pointerdown", outside);
+            document.removeEventListener("keydown", escape);
+            window.removeEventListener("resize", resize);
+            window.visualViewport?.removeEventListener("resize", resize);
+            window.visualViewport?.removeEventListener("scroll", resize);
+        };
+    }, [searchOpen]);
 
-    const exhibitionArtworks = createExhibition(artworks);
+    const exhibitionArtworks = useMemo(() => createExhibition(createArchive(museumData)), [museumData]);
 
     const collection = COLLECTIONS.find(item => item.mode === mode);
-    const data = exhibitionArtworks.filter(item => {
+    const collectionData = useMemo(() => exhibitionArtworks.filter(item => {
         const category = item?.category ?? LEGACY_CATEGORIES[item?.type] ?? item?.type;
         return category === collection.category;
-    });
+    }), [exhibitionArtworks, mode]);
+    const filterOptions = useMemo(() => {
+        const styles = new Map(), breweries = new Map();
+        for (const item of collectionData) {
+            for (const product of searchIndex.get(item.id)?.products || []) {
+                if (product.styleKey && !styles.has(product.styleKey)) styles.set(product.styleKey, product.style);
+                if (product.breweryKey && !breweries.has(product.breweryKey)) breweries.set(product.breweryKey, product.brewery);
+            }
+        }
+        const sorted = values => [...values].sort((a, b) => collator.compare(a[1], b[1]));
+        return { styles: sorted(styles), breweries: sorted(breweries) };
+    }, [collectionData, searchIndex, collator]);
+    const data = useMemo(() => {
+        const terms = normalizeSearch(query).split(/\s+/).filter(Boolean);
+        const filtered = collectionData.filter(item => {
+            const indexed = searchIndex.get(item.id);
+            const matchesProduct = (!styleFilter && !breweryFilter)
+                || indexed?.products.some(p => (!styleFilter || p.styleKey === styleFilter)
+                    && (!breweryFilter || p.breweryKey === breweryFilter));
+            return matchesProduct && terms.every(term => indexed?.text.includes(term));
+        });
+        if (ordering !== "original") filtered.sort((a, b) => {
+            const left = typeof a.name === "string" ? a.name.trim() : "";
+            const right = typeof b.name === "string" ? b.name.trim() : "";
+            if (!left || !right) return left ? -1 : right ? 1 : 0;
+            return collator.compare(left, right) * (ordering === "az" ? 1 : -1);
+        });
+        return filtered;
+    }, [collectionData, searchIndex, query, ordering, styleFilter, breweryFilter, collator]);
 
     const stageWidth = containerWidth || readViewportDimensions().width;
+    const compactToolbar = !isLandscape && stageWidth < 380;
+    const panelTop = panelViewport.offsetTop + (isLandscape ? 68 : compactToolbar ? 140 : 92);
+    const fieldStyle = { width: "100%", minHeight: "44px", boxSizing: "border-box", padding: "8px", border: "1px solid #666", borderRadius: "6px", background: "#181818", color: "#fff", fontSize: "16px" };
+    const filterLabelStyle = { display: "grid", gridTemplateColumns: "88px minmax(0, 1fr)", alignItems: "center", gap: "8px" };
     const maxHeight = Math.max(1, Math.min(300, viewportHeight - (isLandscape ? 32 : 176)));
     const maxWidth = Math.max(1, Math.min(collection.maxWidth, stageWidth - (isLandscape ? 192 : 48)));
     const gap = isLandscape ? 64 : 52; // Includes the previous 12px margins on both cards.
@@ -439,7 +568,11 @@ export default function Museum() {
         const previousId = geometryModeRef.current === mode ? centeredCardRef.current : null;
         const card = cards.find(node => node.dataset.atlasMuseumCardId === previousId) ?? cards[0];
         geometryModeRef.current = mode;
-        if (!card) return;
+        if (!card) {
+            centeredCardRef.current = null;
+            stage.scrollTo({ left: 0, behavior: "instant" });
+            return;
+        }
         // Size changes must preserve the centered artwork, including late legacy image loads.
         stage.scrollTo({ left: card.offsetLeft + card.offsetWidth / 2 - stage.clientWidth / 2, behavior: "instant" });
         centeredCardRef.current = card.dataset.atlasMuseumCardId;
@@ -584,6 +717,147 @@ export default function Museum() {
                 </div>
             )}
 
+            <button
+                type="button"
+                aria-label="Volver"
+                title="Volver"
+                data-atlas-museum-back
+                tabIndex={showUI ? 0 : -1}
+                onClick={() => {
+                    if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
+                    else navigate("/", { replace: true });
+                }}
+                style={{
+                    position: "fixed",
+                    top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+                    left: "calc(env(safe-area-inset-left, 0px) + 12px)",
+                    width: "44px",
+                    height: "44px",
+                    padding: 0,
+                    display: "grid",
+                    placeItems: "center",
+                    zIndex: 100000,
+                    border: 0,
+                    background: "transparent",
+                    color: "#fff",
+                    opacity: showUI ? 1 : 0,
+                    pointerEvents: showUI ? "auto" : "none",
+                    transition: "opacity 0.25s ease",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                    userSelect: "none",
+                }}
+            >
+                <svg aria-hidden="true" focusable="false" width="24" height="24" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    style={{ display: "block" }}>
+                    <path d="M19 12H5m7 7-7-7 7-7" />
+                </svg>
+            </button>
+
+            <button
+                ref={searchTriggerRef}
+                type="button"
+                aria-label="Buscar en el Museo"
+                title="Buscar en el Museo"
+                aria-expanded={searchOpen}
+                aria-controls="museum-search-panel"
+                data-atlas-museum-search
+                tabIndex={showUI ? 0 : -1}
+                onClick={() => {
+                    if (searchOpen) closeSearch();
+                    else {
+                        requestCloseArtwork();
+                        setSearchOpen(true);
+                    }
+                }}
+                style={{
+                    position: "fixed",
+                    top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+                    right: "calc(env(safe-area-inset-right, 0px) + 12px)",
+                    width: "44px", height: "44px", padding: 0,
+                    display: "grid", placeItems: "center", zIndex: 100000,
+                    border: 0, background: "transparent", color: "#fff", cursor: "pointer",
+                    opacity: showUI ? 1 : 0, pointerEvents: showUI ? "auto" : "none",
+                    transition: "opacity 0.25s ease", WebkitTapHighlightColor: "transparent",
+                }}
+            >
+                <svg aria-hidden="true" focusable="false" width="24" height="24" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                    style={{ display: "block" }}>
+                    <circle cx="10.5" cy="10.5" r="6.5" />
+                    <path d="m16 16 5 5" />
+                </svg>
+            </button>
+
+            {searchOpen && (
+                <section
+                    id="museum-search-panel"
+                    ref={searchPanelRef}
+                    role="region"
+                    aria-label="Explorar Museo"
+                    onBlur={event => {
+                        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)
+                            && !searchTriggerRef.current?.contains(event.relatedTarget)) closeSearch(false);
+                    }}
+                    style={{
+                        position: "fixed", top: `calc(${panelTop}px + env(safe-area-inset-top, 0px))`,
+                        right: "calc(env(safe-area-inset-right, 0px) + 12px)",
+                        width: "min(340px, calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)))",
+                        maxHeight: `max(0px, calc(${Math.max(0, panelViewport.height - (panelTop - panelViewport.offsetTop) - 12)}px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)))`,
+                        overflowY: "auto", overscrollBehavior: "contain", boxSizing: "border-box",
+                        zIndex: 100001, padding: "12px", border: "1px solid #555", borderRadius: "12px",
+                        background: "rgba(15,15,15,0.97)", color: "#fff", display: "grid", gap: "8px",
+                    }}
+                >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <strong>Explorar Museo</strong>
+                        <button type="button" aria-label="Cerrar búsqueda" onClick={() => closeSearch()}
+                            style={{ minWidth: "44px", minHeight: "44px", padding: 0 }}>×</button>
+                    </div>
+                    <label style={filterLabelStyle}>
+                        Orden
+                        <select aria-label="Orden del Museo" value={ordering} onChange={event => setOrdering(event.target.value)} style={fieldStyle}>
+                            <option value="original">Original</option>
+                            <option value="az">A–Z</option>
+                            <option value="za">Z–A</option>
+                        </select>
+                    </label>
+                    <label style={filterLabelStyle}>
+                        Estilo
+                        <select aria-label="Estilo de cerveza" value={styleFilter} onChange={event => setStyleFilter(event.target.value)}
+                            disabled={!filterOptions.styles.length} style={fieldStyle}>
+                            <option value="">Todos los estilos</option>
+                            {filterOptions.styles.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                        </select>
+                    </label>
+                    <label style={filterLabelStyle}>
+                        Cervecería
+                        <select aria-label="Cervecería" value={breweryFilter} onChange={event => setBreweryFilter(event.target.value)}
+                            disabled={!filterOptions.breweries.length} style={fieldStyle}>
+                            <option value="">Todas las cervecerías</option>
+                            {filterOptions.breweries.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                        </select>
+                    </label>
+                    <small>Cervecería y origen: atribuciones confirmadas.</small>
+                    <hr style={{ width: "100%", margin: "2px 0", border: 0, borderTop: "1px solid #444" }} />
+                    <label style={{ display: "grid", gap: "4px" }}>
+                        Buscar obras
+                        <input ref={searchInputRef} type="search" aria-label="Buscar obras" value={query}
+                            placeholder="Nombre, estilo, cervecería u origen"
+                            onChange={event => setQuery(event.target.value)}
+                            onFocus={() => {
+                                keyboardViewportRef.current = { width: window.innerWidth, height: window.innerHeight };
+                            }}
+                            style={fieldStyle} />
+                    </label>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                        <span role="status" aria-live="polite" aria-atomic="true" style={{ fontSize: "14px" }}>{data.length} de {collectionData.length} obras</span>
+                        <button type="button" onClick={clearFilters} style={{ minHeight: "44px", padding: "8px", fontSize: "14px" }}>Limpiar filtros</button>
+                    </div>
+                </section>
+            )}
+
             <div
                 ref={containerRef}
                 data-atlas-museum-stage
@@ -602,7 +876,9 @@ export default function Museum() {
                     data-atlas-museum-selector
                     style={{
                         position: "fixed",
-                        top: isLandscape ? "50%" : "20px",
+                        // At narrow widths the selector occupies its own row between the two icons.
+                        top: isLandscape ? "max(50%, calc(env(safe-area-inset-top, 0px) + 179px))" : "20px",
+                        ...(compactToolbar ? { top: "calc(env(safe-area-inset-top, 0px) + 68px)" } : {}),
                         left: isLandscape ? "20px" : "50%",
                         transform: isLandscape
                             ? "translateY(-50%) translateZ(0)"
@@ -630,6 +906,8 @@ export default function Museum() {
                             onClick={() => {
                                 if (mode === item.mode) return;
                                 requestCloseArtwork();
+                                setStyleFilter("");
+                                setBreweryFilter("");
                                 setMode(selectMuseumMode(item.mode));
                             }}
                             style={{
@@ -650,7 +928,7 @@ export default function Museum() {
                 </div>
 
                 {!data.length && (
-                    <p
+                    <div
                         role={museumError ? "alert" : "status"}
                         style={{
                             position: "absolute",
@@ -664,8 +942,18 @@ export default function Museum() {
                             pointerEvents: "none",
                         }}
                     >
-                        {museumLoading ? "Cargando archivo…" : museumError || "Esta colección todavía no tiene obras."}
-                    </p>
+                        <div>
+                            <p style={{ margin: 0 }}>
+                                {museumLoading ? "Cargando archivo…" : museumError || (collectionData.length
+                                    ? "No hay obras que coincidan con los filtros." : "Esta colección todavía no tiene obras.")}
+                            </p>
+                            {!museumLoading && !museumError && collectionData.length > 0 && (
+                                <button type="button" onClick={clearFilters} style={{ display: "block", margin: "12px auto 0", minHeight: "44px", pointerEvents: "auto" }}>
+                                    Limpiar filtros
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 )}
 
                 <div
@@ -696,6 +984,7 @@ export default function Museum() {
                             onImageDimensions={(width, height) => rememberImageRatio(item, width, height)}
                             visualScale={isLandscape ? 0.95 : 1}
                             onClick={() => {
+                                closeSearch(false);
                                 const selectedArtwork =
                                     selectionRef.current.selectArtwork(item);
                                 window.__ATLAS_MUSEUM_MOTION_PROBE__
