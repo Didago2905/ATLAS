@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, useLayoutEffect } from "react";
 import Layout from "../layout/Layout";
 import TapListSettings from "../layout/TapListSettings";
+import IssueReporter from "../components/IssueReporter";
 import TapGrid from "../components/TapGrid";
 import PeekOverlay from "../components/PeekOverlay";
 import useCatalogSession from "../catalog/useCatalogSession";
@@ -32,6 +33,7 @@ export default function Home() {
     const [peekAsset, setPeekAsset] = useState(null);
     const artworkOpenRef = useRef(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [reporterOpen, setReporterOpen] = useState(false);
     const settingsTriggerRef = useRef(null);
     const settingsPanelId = useId();
     const { beers } = useCatalogSession();
@@ -247,6 +249,10 @@ export default function Home() {
                     onOpenChange={setSettingsOpen}
                     triggerRef={settingsTriggerRef}
                     panelId={settingsPanelId}
+                    onReportProblem={() => {
+                        setSettingsOpen(false);
+                        setReporterOpen(true);
+                    }}
                     onRestartTutorial={() => {
                         const query = new URLSearchParams(location.search);
                         query.set("tutorial", "1");
@@ -255,6 +261,9 @@ export default function Home() {
                     }}
                 />
             </div>
+
+            <IssueReporter open={reporterOpen} onClose={() => setReporterOpen(false)}
+                triggerRef={settingsTriggerRef} />
 
             {/* 🍺 TAP GRID */}
             <div ref={tutorialGridRef} className={tutorialEpilogueActive ? "home-tutorial-epilogue-grid" : tutorialActive ? "home-tutorial-grid" : undefined}>

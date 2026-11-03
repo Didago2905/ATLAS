@@ -4,6 +4,13 @@ venv/
 
 # Base de datos local
 atlas.db
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.incidents-worker.lock
 
 # Archivos Python
 __pycache__/
@@ -45,7 +52,17 @@ __pycache__/
 # Local QA, audit, and BrowserStack output/configuration
 app/audit/logs/
 app/data/featured.json
-devtools/
+devtools/*
+!devtools/launcher/
+devtools/launcher/*
+!devtools/launcher/terminal.bat
+!devtools/launcher/launcher.py
+!devtools/qr/
+devtools/qr/*
+!devtools/qr/generate_qr.py
+!devtools/telegram/
+devtools/telegram/*
+!devtools/telegram/bot.py
 frontend/browserstack.yml
 frontend/log/
 frontend/tests/results/

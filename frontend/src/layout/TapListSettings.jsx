@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { TAP_BACKGROUNDS } from "../backgrounds";
 
-export default function TapListSettings({ background, onSelect, open, onOpenChange, triggerRef, panelId, onRestartTutorial }) {
+export default function TapListSettings({ background, onSelect, open, onOpenChange, triggerRef, panelId, onRestartTutorial, onReportProblem }) {
     const panelRef = useRef(null);
     const [panelView, setPanelView] = useState("main");
     const showTips = panelView === "tips";
@@ -99,7 +99,10 @@ export default function TapListSettings({ background, onSelect, open, onOpenChan
             <section className="tap-list-settings__quadrant">
                 <button className="tap-list-settings__action tap-list-settings__credits-action" type="button" onClick={() => setPanelView("credits")}>Créditos</button>
             </section>
-            <div className="tap-list-settings__quadrant" aria-hidden="true" />
+            <section className="tap-list-settings__quadrant">
+                <button className="tap-list-settings__action tap-list-settings__credits-action" type="button"
+                    onClick={onReportProblem}>Reportar un problema</button>
+            </section>
             </>}
         </section>
     );

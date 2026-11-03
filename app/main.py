@@ -6,7 +6,8 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.database import engine, Base
 import app.models.beer
-from app.api import admin, public, audit
+import app.models.issue_report
+from app.api import admin, public, audit, issue_reports
 
 
 app = FastAPI(
@@ -68,6 +69,7 @@ Base.metadata.create_all(bind=engine)
 app.include_router(admin.router)
 app.include_router(public.router)
 app.include_router(audit.router)
+app.include_router(issue_reports.router)
 
 
 @app.get("/")

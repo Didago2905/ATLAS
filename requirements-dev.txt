@@ -1,0 +1,6 @@
+-r requirements.txt
+# Existing canonical launcher: Operations notifications and QR generation.
+requests==2.32.5
+qrcode==8.2
+# Focused backend API tests.
+httpx==0.28.1
