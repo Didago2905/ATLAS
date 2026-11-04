@@ -136,6 +136,11 @@ def _prepare(file):
         raise HTTPException(400, "Invalid image data or color profile; nothing published") from error
 
 
+def prepare_artwork(file):
+    """Validate and derive artwork without publishing or accessing the registry."""
+    return _prepare(file)
+
+
 def _stage(path, content):
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".upload-", delete=False) as output:
