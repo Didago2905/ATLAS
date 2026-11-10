@@ -1,10 +1,15 @@
 import json
+import atexit
 import re
 import subprocess
 from pathlib import Path
 
 from devtools.qr.generate_qr import generate_qr
 from devtools.telegram.bot import send_message, send_photo
+from app.core.bot_observability import event
+
+event("notifications", "started")
+atexit.register(event, "notifications", "stopped")
 
 URL_PATTERN = re.compile(r"https://[^\s]+\.trycloudflare\.com")
 RUNTIME_FILE = Path("devtools/runtime/current_tunnel.json")

@@ -3,6 +3,7 @@ import argparse
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import logging
+from app.core.bot_observability import event
 import random
 import signal
 import threading
@@ -148,10 +149,13 @@ class IncidentWorker:
         owned = acknowledge(self.engine, claim, result, self.clock(), config.max_attempts, self.jitter)
         # Only fixed outcomes, never raw errors, message text, chat IDs or URLs.
         if not owned:
+            event("incidents", "delivery_uncertain")
             logger.warning("Incident delivery lease lost; remote outcome may be ambiguous")
         elif result.code == "sent":
+            event("incidents", "operation_ok")
             logger.info("Incident delivery acknowledged")
         else:
+            event("incidents", "operation_failed")
             logger.warning("Incident delivery deferred or failed")
         if result.stop_worker:
             return "configuration_error"
@@ -183,6 +187,7 @@ def main():
     from app.core.database import engine
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    event("incidents", "started")
     stop = threading.Event()
     signal.signal(signal.SIGINT, lambda *_: stop.set())
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
@@ -192,24 +197,30 @@ def main():
         # Validate before locking: disabled/incomplete configuration never opens
         # a lock file or the database. Manual --once uses the same OS lock.
         if incident_config(settings) is None:
+            event("incidents", "disabled")
             logger.info("Incidents disabled; no reports claimed")
             return 0
         with WorkerInstance(engine.url):
             return run_loop(IncidentWorker(engine, settings), stop, once=args.once)
     except WorkerAlreadyRunning:
+        event("incidents", "already_running")
         logger.warning("Incidents worker already running for this database")
         return 3
     except DeliverySchemaError:
+        event("incidents", "configuration_error")
         logger.error("Incidents schema requires explicit migration; no automatic restart")
         return 4
     except IncidentConfigurationError:
+        event("incidents", "configuration_error")
         logger.error("Incidents enabled but dedicated configuration is missing or invalid; no delivery attempted")
         return 2
     except Exception:
+        event("incidents", "operation_failed")
         logger.error("Incidents worker stopped safely; check migration, database and configuration offline")
         return 1
     finally:
         engine.dispose()
+        event("incidents", "stopped")
 
 
 if __name__ == "__main__":

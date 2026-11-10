@@ -62,6 +62,13 @@ class TelegramTransport:
     def answer_callback(self, callback_id):
         self._request("answerCallbackQuery", {"callback_query_id": callback_id})
 
+    def send_typing(self, chat_id):
+        self._request("sendChatAction", {"chat_id": chat_id, "action": "typing"})
+
+    def remove_inline_keyboard(self, chat_id, message_id):
+        self._request("editMessageReplyMarkup", {"chat_id": chat_id, "message_id": message_id,
+                                                 "reply_markup": {"inline_keyboard": []}})
+
     def send_photo(self, chat_id, text, image, markup=None):
         boundary = uuid4().hex
         fields = {"chat_id": str(chat_id), "caption": text}

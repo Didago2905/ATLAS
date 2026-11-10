@@ -9,7 +9,7 @@ class Cursor(Base):
     __tablename__ = "editorial_cursor"
     id = Column(Integer, primary_key=True)
     next_offset = Column(BigInteger, nullable=False, default=0)
-    schema_version = Column(Integer, nullable=False, default=1)
+    schema_version = Column(Integer, nullable=False, default=2)
 
 
 class Update(Base):
@@ -67,3 +67,21 @@ class Reply(Base):
     asset_id = Column(String(32), ForeignKey("editorial_assets.id"), nullable=True)
     state = Column(String(16), nullable=False, default="pending")
     message_id = Column(BigInteger, nullable=True)
+
+
+class ProposalRevision(Base):
+    """Immutable contract snapshots, independent of legacy image revisions."""
+    __tablename__ = "editorial_proposals"
+    id = Column(Integer, primary_key=True)
+    draft_id = Column(String(32), ForeignKey("editorial_drafts.id"), nullable=False)
+    revision = Column(Integer, nullable=False)
+    payload = Column(JSON, nullable=False)
+    __table_args__ = (UniqueConstraint("draft_id", "revision"),)
+
+
+class Interview(Base):
+    __tablename__ = "editorial_interviews"
+    id = Column(String(32), ForeignKey("editorial_drafts.id"), primary_key=True)
+    revision = Column(Integer, nullable=False)
+    step = Column(String(64), nullable=False)
+    history = Column(JSON, nullable=False)

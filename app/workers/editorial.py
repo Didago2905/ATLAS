@@ -14,12 +14,14 @@ from app.editorial.models import Base, Cursor
 from app.editorial.service import EditorialService
 from app.editorial.telegram import TelegramTransport, TransportError
 from app.migrations.editorial import check_schema
+from app.core.bot_observability import event
 
 
 def run(engine, settings, transport, stop, *, once=False):
     auth = Authorization.load(settings)
     media = MediaStore(settings.media_root)
-    service = EditorialService(engine, auth, media, transport, settings.download_limit_bytes)
+    service = EditorialService(engine, auth, media, transport, settings.download_limit_bytes,
+                               catalog_database_url=getattr(settings, "catalog_database_url", None))
     with engine.connect() as connection:
         check_schema(connection)
     service.recover_replies()
@@ -37,13 +39,16 @@ def run(engine, settings, transport, stop, *, once=False):
                     break
             if not stop.is_set():
                 with Session(engine) as db:
-                    offset = db.get(Cursor, 1).next_offset
+                    # Read-only summaries never update the durable cursor. Advance
+                    # this process's polling position so they cannot fill a batch.
+                    offset = max(db.get(Cursor, 1).next_offset, service.readonly_offset)
                 service.ingest(transport.get_updates(offset))
                 for _ in range(20):
                     if stop.is_set() or not service.process_one():
                         break
                     service.flush_one()
         except TransportError:
+            event("editorial", "transport_unavailable")
             if not once:
                 stop.wait(5)
         if once:
@@ -59,9 +64,11 @@ def main(*, credentials=read_token):
     engine = None
     token = None
     previous = {}
+    event("editorial", "started")
     try:
         settings = load_settings()
         if not settings.enabled:
+            event("editorial", "disabled")
             print("Editorial disabled; no credentials, storage or Telegram accessed")
             return 0
         if not settings.database_url:
@@ -88,12 +95,15 @@ def main(*, credentials=read_token):
                 raise EditorialCredentialUnavailable()
             return run(engine, settings, TelegramTransport(token), stop, once=args.once)
     except WorkerAlreadyRunning:
+        event("editorial", "already_running")
         print("Editorial already running for this database; no second worker started")
         return 3
     except (ValueError, EditorialCredentialUnavailable, OSError):
+        event("editorial", "configuration_error")
         print("Editorial stopped safely; inspect dedicated configuration/storage offline; private details suppressed")
         return 2
     except Exception:
+        event("editorial", "operation_failed")
         print("Editorial unexpected failure; private details suppressed")
         return 1
     finally:
@@ -102,6 +112,7 @@ def main(*, credentials=read_token):
         for sig, handler in previous.items():
             signal.signal(sig, handler)
         token = None
+        event("editorial", "stopped")
 
 
 if __name__ == "__main__":

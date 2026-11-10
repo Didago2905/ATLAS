@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from app.editorial.config import dedicated_database, private_root
 from app.editorial.instance import EditorialInstance
 from app.editorial.models import Base
-from app.migrations.editorial import check_schema
+from app.migrations.editorial import check_schema, LEGACY_TABLES
 
 
 def digest(path):
@@ -28,14 +28,14 @@ def digest(path):
 
 def snapshot(connection):
     tables = {r[0] for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if tables != set(Base.metadata.tables):
+    if tables not in (set(Base.metadata.tables), LEGACY_TABLES):
         raise ValueError("Source must contain only Editorial tables")
     if connection.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
         raise ValueError("Editorial integrity failed")
     if connection.execute("PRAGMA foreign_key_check").fetchall():
         raise ValueError("Editorial references failed")
     return {table: connection.execute(f'SELECT * FROM "{table}" ORDER BY id').fetchall()
-            for table in sorted(Base.metadata.tables)}
+            for table in sorted(tables)}
 
 
 def copy_storage(source_database, source_media, destination):
@@ -88,10 +88,11 @@ def copy_storage(source_database, source_media, destination):
         engine = create_engine("sqlite:///" + target_db.as_posix())
         try:
             with engine.connect() as connection:
-                check_schema(connection)
+                check_schema(connection, legacy=set(before) == LEGACY_TABLES)
         finally:
             engine.dispose()
-        receipt = {"schema": 1, "table_counts": {name: len(rows) for name, rows in before.items()},
+        receipt = {"schema": 1 if set(before) == LEGACY_TABLES else 2,
+                   "table_counts": {name: len(rows) for name, rows in before.items()},
                    "asset_count": len(assets), "database_sha256": digest(target_db),
                    "database_bytes": target_db.stat().st_size, "source_retained": True,
                    "originals_and_previews_verified": True}

@@ -1,13 +1,20 @@
-"""Explicit additive Editorial v1 migration; never imports app.main/config/database."""
+"""Explicit additive v1 -> v2 migration; never imports the operational engine."""
 import argparse
 from pathlib import Path
 from sqlalchemy import create_engine, inspect
 from app.editorial.models import Base, Cursor
+from app.editorial.config import dedicated_database
+from app.editorial.instance import EditorialInstance
+
+V2_TABLES = {"editorial_proposals", "editorial_interviews"}
+LEGACY_TABLES = set(Base.metadata.tables) - V2_TABLES
 
 
-def check_schema(connection):
+def check_schema(connection, *, legacy=False):
     inspector = inspect(connection)
     for table in Base.metadata.sorted_tables:
+        if legacy and table.name in V2_TABLES:
+            continue
         if not inspector.has_table(table.name):
             raise ValueError("Editorial migration required")
         actual = inspector.get_columns(table.name)
@@ -34,7 +41,7 @@ def check_schema(connection):
         if wanted_foreign != found_foreign:
             raise ValueError("Unsupported Editorial references")
     row = connection.exec_driver_sql("SELECT schema_version FROM editorial_cursor WHERE id=1").first()
-    if not row or row[0] != 1:
+    if not row or row[0] != (1 if legacy else 2):
         raise ValueError("Unsupported Editorial version")
 
 
@@ -46,10 +53,16 @@ def migrate(engine):
         try:
             existing = set(inspect(connection).get_table_names()) & set(Base.metadata.tables)
             if existing:
-                check_schema(connection)  # Partial/incompatible schemas are never repaired silently.
+                if existing == LEGACY_TABLES:
+                    check_schema(connection, legacy=True)
+                    for table in Base.metadata.sorted_tables:
+                        if table.name in V2_TABLES:
+                            table.create(connection)
+                    connection.exec_driver_sql("UPDATE editorial_cursor SET schema_version=2 WHERE id=1")
+                check_schema(connection)  # Partial/incompatible schemas fail closed.
             else:
                 Base.metadata.create_all(connection)
-                connection.execute(Cursor.__table__.insert().values(id=1, next_offset=0, schema_version=1))
+                connection.execute(Cursor.__table__.insert().values(id=1, next_offset=0, schema_version=2))
                 check_schema(connection)
             connection.commit()
         except BaseException:
@@ -67,8 +80,10 @@ def main():
         parser.error("Missing database; --create is required for new storage")
     engine = create_engine("sqlite:///" + path.as_posix())
     try:
-        migrate(engine)
-        print("Editorial v1 schema ready; no catalog or Museum publication performed")
+        dedicated_database("sqlite:///" + path.as_posix())
+        with EditorialInstance("sqlite:///" + path.as_posix()):
+            migrate(engine)
+        print("Editorial v2 schema ready; no catalog or Museum publication performed")
         return 0
     except Exception:
         print("Editorial migration failed; transaction rolled back; inspect schema offline")

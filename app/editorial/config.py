@@ -20,6 +20,7 @@ class EditorialSettings(BaseSettings):
     chat_id: int | None = None
     permissions_file: Path | None = STORAGE / "permissions.json"
     download_limit_bytes: int = Field(default=15 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
+    catalog_database_url: str | None = None  # Explicit read-only identity source; never the Editorial engine.
 
     @classmethod
     def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
