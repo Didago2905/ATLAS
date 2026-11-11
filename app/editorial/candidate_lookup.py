@@ -3,7 +3,7 @@
 Sources must be supplied explicitly. Importing this module does not load ATLAS
 configuration, the operational engine, publication services or Telegram.
 """
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -101,6 +101,48 @@ def _sqlite_file(database_url: str) -> Path:
         raise CandidateLookupError("An existing explicit SQLite file URL is required") from None
 
 
+@contextmanager
+def _catalog_connection(database_url):
+    path = _sqlite_file(database_url)
+    try:
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=15)) as connection:
+            connection.execute("PRAGMA query_only=ON")
+            if connection.execute("SELECT query_only FROM pragma_query_only").fetchone() != (1,):
+                raise CandidateLookupError("Read-only catalog protection unavailable")
+
+            def authorize(action, table, column, database, trigger):
+                if action == sqlite3.SQLITE_READ:
+                    return sqlite3.SQLITE_OK if table == "beers" else sqlite3.SQLITE_DENY
+                return sqlite3.SQLITE_OK if action in (sqlite3.SQLITE_SELECT, sqlite3.SQLITE_FUNCTION) else sqlite3.SQLITE_DENY
+
+            connection.set_authorizer(authorize)
+            connection.row_factory = sqlite3.Row
+            yield connection
+    except sqlite3.Error:
+        raise CandidateLookupError("Cannot read beer candidates from the supplied catalog") from None
+
+
+def read_commercial_beer(database_url, beer_id):
+    """Allowlisted current commercial snapshot. No ORM or operational engine."""
+    if type(beer_id) is not int or not 0 < beer_id < 2**63:
+        raise CandidateLookupError("A positive beer ID is required")
+    with _catalog_connection(database_url) as connection:
+        row = connection.execute("SELECT name,brewery,style,origin,color,description,abv,ibu,prices,is_deleted "
+                                 "FROM beers WHERE id=?", (beer_id,)).fetchone()
+    if row is None or _flag(row['is_deleted']) is not False:
+        raise CandidateLookupError("Beer unavailable for commercial preparation")
+    result = dict(row)
+    result.pop('is_deleted')
+    if isinstance(result['prices'], str):
+        try:
+            result['prices'] = json.loads(result['prices'])
+        except (ValueError, TypeError):
+            raise CandidateLookupError("Invalid catalog prices") from None
+    if result['prices'] is not None and not isinstance(result['prices'], dict):
+        raise CandidateLookupError("Invalid catalog prices")
+    return result
+
+
 def lookup_beers(database_url: str, *, name: str, brewery: str | None = None,
                  style: str | None = None, mode: Match = "normalized", limit: int = 10,
                  include_deleted: bool = True, beer_id: int | None = None) -> tuple[BeerCandidate, ...]:
@@ -122,25 +164,8 @@ def lookup_beers(database_url: str, *, name: str, brewery: str | None = None,
         raise ValueError("include_deleted must be boolean")
     if beer_id is not None and (type(beer_id) is not int or not 0 < beer_id < 2**63):
         raise ValueError("A positive beer ID is required")
-    path = _sqlite_file(database_url)
-    try:
-        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=15)) as connection:
-            connection.execute("PRAGMA query_only=ON")
-            if connection.execute("SELECT query_only FROM pragma_query_only").fetchone() != (1,):
-                raise CandidateLookupError("Read-only catalog protection unavailable")
-
-            def authorize(action, table, column, database, trigger):
-                if action == sqlite3.SQLITE_READ:
-                    return sqlite3.SQLITE_OK if table == "beers" else sqlite3.SQLITE_DENY
-                return sqlite3.SQLITE_OK if action in (sqlite3.SQLITE_SELECT, sqlite3.SQLITE_FUNCTION) else sqlite3.SQLITE_DENY
-
-            connection.set_authorizer(authorize)
-            connection.row_factory = sqlite3.Row
-            rows = connection.execute(
-                "SELECT id,name,brewery,style,is_available,is_deleted FROM beers ORDER BY id"
-            ).fetchall()
-    except sqlite3.Error:
-        raise CandidateLookupError("Cannot read beer candidates from the supplied catalog") from None
+    with _catalog_connection(database_url) as connection:
+        rows = connection.execute("SELECT id,name,brewery,style,is_available,is_deleted FROM beers ORDER BY id").fetchall()
     candidates = []
     for row in rows:
         if beer_id is not None and row["id"] != beer_id:

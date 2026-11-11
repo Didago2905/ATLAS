@@ -6,7 +6,7 @@ from pydantic import Field
 
 from app.editorial.patches import BEER_FIELDS, PRICE_KEYS, DomainModel, correct_patch_field
 from app.editorial.proposal_v22 import (
-    BrewerySubject, CommercialAction, NewBeer, Proposal22, UnknownSubject, content_fingerprint,
+    BrewerySubject, CommercialAction, CreateBeerAction, NewBeer, Proposal22, UnknownSubject, content_fingerprint,
 )
 
 Version = Annotated[int, Field(strict=True, gt=0, le=2**63 - 1)]
@@ -38,7 +38,7 @@ def valid_paths(proposal: Proposal22) -> tuple[str, ...]:
             paths.extend(base + "/" + key for key in BEER_FIELDS)
             paths.extend(base + "/prices." + key for key in PRICE_KEYS)
     for action in proposal.actions:
-        if isinstance(action, CommercialAction):
+        if isinstance(action, (CommercialAction, CreateBeerAction)):
             paths.extend(f"commercial/{action.id}/{key}" for key in BEER_FIELDS)
             paths.extend(f"commercial/{action.id}/prices.{key}" for key in PRICE_KEYS)
     for artwork in proposal.artworks:

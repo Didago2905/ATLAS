@@ -3,6 +3,7 @@ from sqlalchemy import select
 from pydantic import ValidationError
 from app.editorial.models import Interview, ProposalRevision, Asset
 from app.editorial.proposal import Proposal, PRICE_KEYS, validate_proposal
+from app.editorial import draft_lifecycle
 
 ROLE_NAMES = {'beer_card': 'Ficha de cerveza', 'tap_board': 'Tabla del Tap List', 'label': 'Etiqueta'}
 LABELS = {'targets': '¿Qué quieres preparar?', 'existing_beer_id': 'ID de cerveza existente (sin consultar el catálogo)',
@@ -22,6 +23,8 @@ def latest(db, draft, *, include_inactive=False):
     state = db.get(Interview, draft.id)
     if not include_inactive and state and state.step == 'legacy_pending':
         return None  # Prior proposals are retained, but do not belong to the new legacy intake.
+    if not include_inactive and state and isinstance(state.history, dict) and state.history.get('flow') == 'carta_identity':
+        return draft_lifecycle.case_latest(db, draft.id, state.history['navigation']['case_id'])
     return db.scalar(select(ProposalRevision).where(ProposalRevision.draft_id == draft.id)
                      .order_by(ProposalRevision.revision.desc()).limit(1))
 
@@ -93,7 +96,8 @@ def begin(db, draft, operation):
         interview = Interview(id=draft.id, revision=0, step='targets', history=[])
         db.add(interview)
     else:
-        interview.step, interview.history = 'targets', []
+        interview.step = 'targets'
+        draft_lifecycle.set_legacy_steps(interview, [])
     save(db, draft, interview, p, 'Inicio de entrevista; imágenes anteriores conservadas sin asignación automática')
     return interview
 
@@ -182,14 +186,15 @@ def transition(db, draft, action=None, text=None):
     base, _, role = step.partition(':')
     if action in {'summary', 'edit', 'resume', 'back'}:
         if action == 'back':
-            history = list(interview.history)
+            history = list(draft_lifecycle.legacy_steps(interview))
             interview.step = history.pop() if history else 'targets'
-            interview.history = history
+            draft_lifecycle.set_legacy_steps(interview, history)
         elif action == 'resume':
-            interview.step = interview.history[-1] if interview.history else 'targets'
+            history = draft_lifecycle.legacy_steps(interview)
+            interview.step = history[-1] if history else 'targets'
         else:
             if step not in {'summary', 'edit'}:
-                interview.history = [*interview.history[-99:], step]
+                draft_lifecycle.set_legacy_steps(interview, [*draft_lifecycle.legacy_steps(interview)[-99:], step])
             interview.step = action
         save(db, draft, interview, p, 'Navegación de entrevista')
         return render(db, draft)
@@ -218,7 +223,7 @@ def transition(db, draft, action=None, text=None):
             if value:
                 p = set_field(p, 'operation', role)
                 p = set_field(p, 'targets', [])
-                interview.history = []
+                draft_lifecycle.set_legacy_steps(interview, [])
                 next_step = 'targets'
             else:
                 next_step = 'summary'
@@ -261,7 +266,7 @@ def transition(db, draft, action=None, text=None):
     if next_step is None:
         index = fields.index(base) if base in fields else len(fields)
         next_step = fields[index + 1] if index + 1 < len(fields) else 'asset'
-    interview.history = [*interview.history[-99:], step]
+    draft_lifecycle.set_legacy_steps(interview, [*draft_lifecycle.legacy_steps(interview)[-99:], step])
     interview.step = next_step
     save(db, draft, interview, p, 'Respuesta: ' + base)
     return render(db, draft)

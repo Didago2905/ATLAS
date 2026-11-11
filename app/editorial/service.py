@@ -6,7 +6,9 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.editorial.models import Cursor, Update, Asset, Draft, Version, Reply, Interview
-from app.editorial import interview, carta_identity
+from app.editorial import interview, carta_identity, commercial_interview
+from app.editorial import draft_lifecycle
+from app.editorial.draft_lifecycle import INACTIVE
 from app.editorial.proposal import Proposal, validate_proposal
 from app.editorial.telegram import DownloadLimit, TransportError
 from app.core.bot_observability import event
@@ -44,7 +46,7 @@ def project_update(raw, auth):
     value = {"chat": chat["id"], "user": actor["id"]}
     if isinstance(callback, dict):
         data = callback.get("data")
-        if not isinstance(data, str) or not re.fullmatch(r"(?:(?:op|start):[a-f0-9]{32}:[0-9]{1,9}:(?:new|art|fix|board|event)|i:[a-f0-9]{32}:[0-9]{1,9}:(?:[0-9]{1,2}|back|skip|summary|edit|resume)|c22:[a-f0-9]{32}:[0-9]{1,9}:[0-9]{1,9}:(?:[0-2]|r|x))", data):
+        if not isinstance(data, str) or not re.fullmatch(r"(?:(?:op|start):[a-f0-9]{32}:[0-9]{1,9}:(?:new|art|fix|board|event)|i:[a-f0-9]{32}:[0-9]{1,9}:(?:[0-9]{1,2}|back|skip|summary|edit|resume)|c22:[a-f0-9]{32}:[0-9]{1,9}:[0-9]{1,9}:(?:[0-2]|r|x)|b22:[a-f0-9]{32}:[0-9]{1,9}:[0-9]{1,9}:(?:[kscubvdxfh]|e(?:[0-9]|1[0-2]))|r22:(?:[a-f0-9]{32}:[0-9]{1,9}|list:[0-9]{1,6}))", data):
             return {"ignore": True}
         value["callback"] = data
         callback_id = callback.get("id")
@@ -55,7 +57,7 @@ def project_update(raw, auth):
         value["invalid_attachment"] = "Envía el archivo directamente como respuesta al bot, sin reenviarlo. Tu borrador sigue aquí."
         return value
     text = message.get("text", "")
-    if isinstance(text, str) and re.fullmatch(r"/(?:obra|vista|cancelar|entrevista|continuar|resumen|corregir|carta22)(?:@[A-Za-z0-9_]{5,32})?", text.strip()):
+    if isinstance(text, str) and re.fullmatch(r"/(?:obra|vista|cancelar|entrevista|continuar|resumen|corregir|carta22|nueva22|editar22|rapido22|borradores22)(?:@[A-Za-z0-9_]{5,32})?", text.strip()):
         value["command"] = text.strip().split("@")[0]
         return value
     reply = message.get("reply_to_message")
@@ -98,7 +100,10 @@ class EditorialService:
             draft = db.scalar(select(Draft).where(Draft.chat_id == payload["chat"], Draft.user_id == payload["user"]))
             proposal = interview.latest(db, draft) if draft else None
             if draft and carta_identity.owns(db, draft):
-                text = carta_identity.render(db, draft)[0]
+                if draft.state not in INACTIVE and db.get(Interview, draft.id).history.get("phase") == "commercial":
+                    text = commercial_interview.summary(db, draft)
+                else:
+                    text = carta_identity.render(db, draft)[0]
             elif proposal:
                 try:
                     text = interview.proposal_summary(proposal.payload)
@@ -152,7 +157,9 @@ class EditorialService:
         if draft is None:
             return True
         state = db.get(Interview, draft.id)
-        if state and (state.step == "v2.2" or not isinstance(state.history, list)):
+        legacy_envelope = state and isinstance(state.history, dict) and state.history.get('flow') == 'legacy_with_saved' \
+            and isinstance(state.history.get('steps'), list)
+        if state and (state.step == "v2.2" or (not isinstance(state.history, list) and not legacy_envelope)):
             return False
         row = interview.latest(db, draft)
         if row is None:
@@ -192,11 +199,11 @@ class EditorialService:
                 return False
             uid, payload = item.id, item.payload
             draft = db.scalar(select(Draft).where(Draft.chat_id == payload.get("chat"), Draft.user_id == payload.get("user")))
-            eligible_attachment = draft is not None and draft.state != "cancelled" \
+            eligible_attachment = draft is not None and draft.state not in INACTIVE \
                 and self._editable_with_v21(db, draft) \
                 and payload.get("reply_to") is not None and payload["reply_to"] == draft.prompt_message_id
             expected_revision = draft.revision if draft else None
-            carta_search = draft is not None and draft.state != "cancelled" \
+            carta_search = draft is not None and draft.state not in INACTIVE \
                 and self.auth.allows(payload.get("chat"), payload.get("user")) \
                 and carta_identity.owns(db, draft) and payload.get("text") \
                 and draft.prompt_message_id is not None and payload.get("reply_to") == draft.prompt_message_id \
@@ -243,28 +250,59 @@ class EditorialService:
             draft = db.scalar(select(Draft).where(Draft.chat_id == payload["chat"], Draft.user_id == payload["user"]))
             text, markup, asset_id, prompt = "Usa /obra para preparar una imagen.", None, None, False
             command = payload.get("command")
-            if carta_identity.owns(db, draft) and draft.state == "cancelled" and command in {
+            if carta_identity.owns(db, draft) and draft.state in INACTIVE and command in {
                     "/obra", "/entrevista", "/continuar", "/corregir", "/vista", "/cancelar"}:
                 state = db.get(Interview, draft.id)
                 # Keep the proposal revision floor; legacy save will append above it.
                 # A new image revision boundary also invalidates pre-Carta op/start buttons.
-                state.step, state.history = "legacy_pending", []
+                latest = interview.latest(db, draft, include_inactive=True)
+                state.revision = latest.revision if latest else state.revision
+                state.step = "legacy_pending"
+                draft_lifecycle.set_legacy_steps(state, [])
                 draft.revision += 1
                 draft.prompt_message_id = None
-            if command == "/carta22":
+            if command == "/borradores22" or payload.get('callback', '').startswith('r22:list:'):
+                offset = int(payload['callback'].split(':')[2]) if payload.get('callback') else 0
+                text, markup, asset_id, prompt = draft_lifecycle.listing(db, draft, self.auth, offset=offset)
+            elif payload.get('callback', '').startswith('r22:'):
+                text, markup, asset_id, prompt = draft_lifecycle.reopen(db, draft, payload['callback'], self.auth)
+            elif command == "/nueva22":
+                if not self.auth.allows(payload["chat"], payload["user"], "beer.create"):
+                    text = "No tienes permiso para proponer una cerveza nueva."
+                elif draft and draft.state not in INACTIVE:
+                    text = "Ya tienes un borrador activo. Usa /continuar o /cancelar."
+                else:
+                    draft, _ = carta_identity.begin(db, draft, payload["chat"], payload["user"])
+                    text, markup, asset_id, prompt = commercial_interview.start(db, draft, mode="new")
+            elif command in {"/editar22", "/rapido22"}:
+                if not self.auth.allows(payload["chat"], payload["user"], "beer.edit"):
+                    text = "No tienes permiso para proponer cambios comerciales."
+                elif not carta_identity.owns(db, draft) or draft.state in INACTIVE:
+                    text = "Primero confirma una cerveza con /carta22. Tu borrador se conserva."
+                else:
+                    try:
+                        text, markup, asset_id, prompt = commercial_interview.start(
+                            db, draft, mode="edit", catalog_url=self.catalog_database_url, quick=command == "/rapido22")
+                    except (ValueError, OSError):
+                        text = "No se pudo verificar la identidad y sus valores actuales. No se cambió la propuesta."
+            elif command == "/carta22":
                 if not self.catalog_database_url:
                     text = "La consulta de Carta V2.2 aún no está configurada. Tu borrador se conserva."
                 else:
                     draft, result = carta_identity.begin(db, draft, payload["chat"], payload["user"])
                     text, markup, asset_id, prompt = result
-            elif carta_identity.owns(db, draft) and draft.state != "cancelled":
+            elif carta_identity.owns(db, draft) and draft.state not in INACTIVE:
                 previous_phase = db.get(Interview, draft.id).history["phase"]
-                text, markup, asset_id, prompt = carta_identity.transition(
-                    db, draft, payload, self.catalog_database_url, uid)
-                if draft.state == "cancelled" or (previous_phase != "confirmed"
+                if previous_phase == "commercial" and command != "/cancelar" and not self.auth.allows(
+                        draft.chat_id, draft.user_id, commercial_interview.permission(db.get(Interview, draft.id))):
+                    text = "No tienes permiso para modificar esta propuesta comercial. El borrador se conserva."
+                else:
+                    text, markup, asset_id, prompt = carta_identity.transition(
+                        db, draft, payload, self.catalog_database_url, uid)
+                if draft.state in INACTIVE or (previous_phase != "confirmed"
                                                   and db.get(Interview, draft.id).history["phase"] == "confirmed"):
                     cleanup_messages = carta_identity.obsolete_keyboards(db, draft)
-            elif payload.get("callback", "").startswith("c22:"):
+            elif payload.get("callback", "").startswith(("c22:", "b22:")):
                 text = carta_identity.STALE
             elif not self._editable_with_v21(db, draft):
                 text = "La edición de este contrato no está habilitada. Usa /resumen. El borrador se conserva sin cambios."
@@ -273,7 +311,7 @@ class EditorialService:
                     draft = Draft(id=uuid4().hex, chat_id=payload["chat"], user_id=payload["user"])
                     db.add(draft)
                     db.flush()
-                if draft.state == "cancelled":
+                if draft.state in INACTIVE:
                     draft.state = "draft"
                 text, markup, prompt = PROMPT, {"force_reply": True, "input_field_placeholder": "Adjunta una imagen"}, True
             elif command in {"/entrevista", "/continuar", "/corregir"}:
@@ -281,7 +319,7 @@ class EditorialService:
                     draft = Draft(id=uuid4().hex, chat_id=payload["chat"], user_id=payload["user"])
                     db.add(draft)
                     db.flush()
-                if command in {"/entrevista", "/continuar"} and draft.state == "cancelled":
+                if command in {"/entrevista", "/continuar"} and draft.state in INACTIVE:
                     draft.state = "draft"
                 current = self._current(db, draft)
                 state = db.get(Interview, draft.id)
@@ -305,9 +343,9 @@ class EditorialService:
             elif command == "/cancelar" and draft:
                 draft.state, draft.prompt_message_id = "cancelled", None
                 text = "Borrador cerrado. No se publicó nada. Usa /obra para retomarlo."
-            elif payload.get("callback") and (draft is None or draft.state == "cancelled"):
+            elif payload.get("callback") and (draft is None or draft.state in INACTIVE):
                 text = "Ese botón ya no está vigente. Usa /continuar para retomar el borrador."
-            elif draft and draft.state != "cancelled":
+            elif draft and draft.state not in INACTIVE:
                 if command == "/vista":
                     text, markup, asset_id = self._preview(db, draft)
                     if db.get(Interview, draft.id):
@@ -449,7 +487,7 @@ class EditorialService:
             reply.state, reply.message_id = "sent", mid
             if reply.is_prompt:
                 draft = db.get(Draft, reply.draft_id)
-                if draft.state != "cancelled":
+                if draft.state not in INACTIVE:
                     draft.prompt_message_id = mid
             db.commit()
         event("editorial", "operation_ok")

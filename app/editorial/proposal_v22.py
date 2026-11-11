@@ -6,7 +6,8 @@ from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 
-from app.editorial.patches import CommercialPatch, DomainModel, SetValue, Clear, patch_intentions, text_type
+from app.editorial.patches import (CommercialPatch, DomainModel, SetValue, Clear, patch_intentions, text_type,
+                                   BEER_FIELDS, PRICE_KEYS, apply_commercial_patch)
 from app.editorial.proposal import Museum, ProposedBeer
 
 Digest = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
@@ -139,6 +140,18 @@ class CommercialAction(DomainModel):
     patch: CommercialPatch = Field(default_factory=CommercialPatch)
 
 
+class CreateBeerAction(CommercialAction):
+    kind: Literal["beer_create"]
+    is_available: Literal[False] = False
+
+    @field_validator("is_available", mode="before")
+    @classmethod
+    def unavailable_only(cls, value):
+        if value is not False:
+            raise ValueError("New beer proposals must remain unavailable")
+        return value
+
+
 class ReplaceCardAction(DomainModel):
     kind: Literal["replace_beer_card"]
     id: UUID
@@ -165,7 +178,7 @@ class ArtworkUseAction(DomainModel):
     beer_identity_id: UUID
 
 
-Action = Annotated[CommercialAction | ReplaceCardAction | RegisterArtworkAction | ReuseArtworkAction |
+Action = Annotated[CommercialAction | CreateBeerAction | ReplaceCardAction | RegisterArtworkAction | ReuseArtworkAction |
                    ArtworkUseAction, Field(discriminator="kind")]
 VocabularyField = Literal["name", "brewery", "style", "origin", "color"]
 
@@ -266,6 +279,13 @@ class Proposal22(DomainModel):
                 raise ValueError("Action refers to a missing beer identity")
             if hasattr(action, "artwork_id") and action.artwork_id not in art:
                 raise ValueError("Action refers to a missing artwork")
+            if isinstance(action, CreateBeerAction) and not isinstance(beers[action.beer_identity_id], NewBeer):
+                raise ValueError("Creation requires a new beer identity")
+            if isinstance(action, CreateBeerAction):
+                optional = (set(BEER_FIELDS) - {"name", "brewery", "style"}) | {"prices." + k for k in PRICE_KEYS}
+                candidate = ProposedBeer.model_validate(apply_commercial_patch({}, action.patch, allow_clear=frozenset(optional)))
+                if beers[action.beer_identity_id].candidate != candidate:
+                    raise ValueError("New beer values must match their explicit commercial intentions")
             if isinstance(action, RegisterArtworkAction) and not isinstance(art[action.artwork_id].source, PrivateAsset):
                 raise ValueError("Existing Museum artwork cannot be registered again")
             if isinstance(action, ReuseArtworkAction) and not isinstance(art[action.artwork_id].source, MuseumReference):

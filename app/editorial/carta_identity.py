@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from app.editorial import interview
+from app.editorial.draft_lifecycle import INACTIVE, archive, close
 from app.editorial.candidate_lookup import lookup_beers, CandidateLookupError
 from app.editorial.models import Draft, Interview, ProposalRevision, Reply
 from app.editorial.navigation_v22 import NavigationState, CallbackContext, assert_callback, start_navigation, reconcile_paths
@@ -26,7 +27,7 @@ def _store(db, draft, state, proposal):
 
 
 def begin(db, draft, chat, user):
-    if draft and draft.state != "cancelled":
+    if draft and draft.state not in INACTIVE:
         return draft, ("Ya tienes un borrador activo. Usa /continuar o /cancelar antes de iniciar Carta V2.2.", None, None, False)
     if draft is None:
         draft = Draft(id=uuid4().hex, chat_id=chat, user_id=user)
@@ -38,21 +39,29 @@ def begin(db, draft, chat, user):
                          beers=({"kind": "unresolved", "id": uuid4()},),
                          change_summary="Inicio de caso Carta: solo identificación")
     state = db.get(Interview, draft.id)
+    if state and isinstance(state.history, dict) and state.history.get('phase') == 'commercial' and draft.state in INACTIVE:
+        close(db, draft, status=draft.state)
+    saved = archive(state)
     if state is None:
         state = Interview(id=draft.id, step="v2.2", revision=revision, history={})
         db.add(state)
     state.step = "v2.2"
     state.history = {"flow": "carta_identity", "operation": "carta", "phase": "name",
-                     "navigation": start_navigation(proposal).model_dump(mode="json"), "candidates": []}
+                     "navigation": start_navigation(proposal).model_dump(mode="json"), "candidates": [], "saved_cases": saved}
     draft.state, draft.prompt_message_id = "draft", None
     _store(db, draft, state, proposal)
     return draft, render(db, draft)
 
 
 def render(db, draft):
+    if draft.state == "saved":
+        return "Propuesta conservada como borrador sin aprobación. Usa /borradores22 para recuperarla.", None, None, False
     if draft.state == "cancelled":
         return "Caso Carta cerrado. No se publicó nada.", None, None, False
     state = db.get(Interview, draft.id)
+    if state.history.get("phase") == "commercial":
+        from app.editorial.commercial_interview import render as commercial_render
+        return commercial_render(db, draft)
     proposal = Proposal22.model_validate(interview.latest(db, draft).payload)
     data = state.history
     nav = NavigationState.model_validate(data["navigation"])
@@ -85,6 +94,9 @@ def render(db, draft):
 
 def transition(db, draft, payload, catalog_url, uid):
     state = db.get(Interview, draft.id)
+    if state.history.get("phase") == "commercial":
+        from app.editorial.commercial_interview import transition as commercial_transition
+        return commercial_transition(db, draft, payload)
     data = dict(state.history)
     proposal = Proposal22.model_validate(interview.latest(db, draft).payload)
     nav = NavigationState.model_validate(data["navigation"])
@@ -167,9 +179,10 @@ def transition(db, draft, payload, catalog_url, uid):
 def obsolete_keyboards(db, draft):
     """Only known, sent bot messages for this Carta case; no message/history deletion."""
     state = db.get(Interview, draft.id)
-    if draft.state != "cancelled" and state.history["phase"] != "confirmed":
+    if draft.state not in INACTIVE and state.history["phase"] != "confirmed":
         return []
-    prefix = "c22:" + state.history["navigation"]["case_id"].replace("-", "") + ":"
+    case = state.history["navigation"]["case_id"].replace("-", "")
+    prefixes = ("c22:" + case + ":", "b22:" + case + ":")
     messages = []
     for reply in db.scalars(select(Reply).where(Reply.draft_id == draft.id, Reply.chat_id == draft.chat_id, Reply.state == "sent",
                                                Reply.message_id.is_not(None), Reply.markup.is_not(None))):
@@ -177,6 +190,6 @@ def obsolete_keyboards(db, draft):
             continue  # SQLite JSON null is not SQL NULL; ordinary text replies have no keyboard.
         rows = reply.markup.get("inline_keyboard", [])
         buttons = [button for row in rows for button in row]
-        if buttons and all(button.get("callback_data", "").startswith(prefix) for button in buttons):
+        if buttons and all(button.get("callback_data", "").startswith(prefixes) for button in buttons):
             messages.append(reply.message_id)
     return messages
