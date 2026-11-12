@@ -17,6 +17,8 @@ STALE = 'La revisión ya no está vigente. Usa /aplicar22 para revisar de nuevo.
 
 
 def _notice(enabled):
+    if enabled == 'production':
+        return 'Ejecución comercial habilitada para destinos expresamente autorizados.'
     return 'Solo este entorno temporal allowlisted permite ejecución post-commit. Producción sigue bloqueada.' if enabled else DISABLED
 
 
@@ -66,7 +68,8 @@ def _render(review):
     if page + 1 < len(review['pages']):
         buttons.append([{'text':'Siguiente página','callback_data':f"a22:{review['nonce']}:p{page+1}"}])
     elif review['status'] == 'reviewed':
-        header += 'Confirma la autorización de este contenido exacto; NO se ejecutará SQL.\n'
+        header += ('Confirma este contenido exacto; se solicitará su aplicación.\n' if review.get('isolated_execution_enabled')
+                   else 'Confirma la autorización de este contenido exacto; NO se ejecutará SQL.\n')
         buttons.append([{'text':'Confirmar autorización','callback_data':f"a22:{review['nonce']}:confirm"}])
     else:
         header += 'No puede autorizarse: resuelve conflictos o cambios vacíos primero.\n'
@@ -98,7 +101,7 @@ def _receipt(url, review, *, notice=DISABLED, request=None):
     return f'Recibo persistido\nID: {row[0]}\nCerveza #{row[3]} · revisión {row[2]}\nEstado: {row[6]}\nUTC: {row[7]}'
 
 
-def handle(db, draft, payload, auth, catalog_url, *, update_id=None, isolated_execution_enabled=False):
+def handle(db, draft, payload, auth, catalog_url, *, update_id=None, isolated_execution_enabled=False, production_activation=None):
     if not _allowed(auth,payload):
         return 'No tienes permiso para autorizar aplicaciones comerciales.', None, None, False
     if draft is None or draft.chat_id != payload['chat'] or draft.user_id != payload['user']:
@@ -129,7 +132,8 @@ def handle(db, draft, payload, auth, catalog_url, *, update_id=None, isolated_ex
                           revision=prepared.proposal_revision,beer_id=prepared.beer_id,
                           request_sha256=approval_digest(proposal,context),current_sha256=prepared.current_sha256,
                           catalog_binding=_binding(catalog_url),pages=_pages(prepared),page=0,
-                          status='reviewed' if prepared.status == 'prepared' else 'blocked',isolated_execution_enabled=isolated_execution_enabled)
+                          status='reviewed' if prepared.status == 'prepared' else 'blocked',isolated_execution_enabled=isolated_execution_enabled,
+                          production_activation=production_activation)
             _store(state,review)
             return _render(review)
         review = deepcopy(state.history.get('application_review',{}))
@@ -146,6 +150,8 @@ def handle(db, draft, payload, auth, catalog_url, *, update_id=None, isolated_ex
             except (ValueError,OSError,sqlite3.Error):
                 return 'No se pudo verificar un recibo persistido. No se afirma ninguna aplicación.',None,None,False
         _, nonce, action = callback.split(':')
+        if review.get('production_activation') != production_activation:
+            raise ValueError()
         if nonce != review['nonce']:
             raise ValueError()
         proposal, context = _saved(db,draft,review['case_id'],review['revision'])
@@ -172,9 +178,9 @@ def handle(db, draft, payload, auth, catalog_url, *, update_id=None, isolated_ex
         review.update(status='confirmed_execution_disabled',approval=approval.model_dump(mode='json'))
         _store(state,review)
         from app.editorial.commercial_execution import enqueue
-        request_id = enqueue(state,draft,review,current,update_id=update_id)
+        request_id = enqueue(state,draft,review,current,update_id=update_id,production_activation=production_activation)
         review['request_id'] = request_id
         _store(state,review)
-        return 'Autorización explícita registrada; solicitud pendiente. Aprobado no significa aplicado. '+_notice(isolated_execution_enabled)+' /recibo22 verifica el recibo.',None,None,False
+        return f'Autorización explícita registrada; solicitud pendiente. ID: {request_id}. Aprobado no significa aplicado. '+_notice(isolated_execution_enabled)+' /recibo22 verifica el recibo.',None,None,False
     except (ValueError,KeyError,TypeError,AttributeError,OSError):
         return STALE,None,None,False

@@ -1,4 +1,4 @@
-"""Opt-in draft worker with its own Credential Manager entry; never publishes."""
+"""Editorial worker; commercial SQL execution requires a separate opt-in capability."""
 import argparse
 import re
 import signal
@@ -18,10 +18,32 @@ from app.core.bot_observability import event
 
 
 def run(engine, settings, transport, stop, *, once=False):
+    target = None
+    scope = None
+    try:
+        execution = getattr(settings,'commercial_execution',None)
+        if execution is not None and execution.enabled:
+            from app.editorial.production_execution import allow_production_execution
+            from app.editorial.commercial_applicator import _check_receipts
+            if not settings.catalog_database_url:
+                raise ValueError('Explicit catalog required')
+            target = create_engine(settings.catalog_database_url,connect_args={'timeout':15})
+            scope = allow_production_execution(engine,target,config=execution)
+            with target.connect() as connection:
+                _check_receipts(connection)  # Validate only; never create or migrate.
+        return _run(engine,settings,transport,stop,once=once,scope=scope)
+    finally:
+        if target is not None:
+            target.dispose()
+
+
+def _run(engine, settings, transport, stop, *, once=False, scope=None):
     auth = Authorization.load(settings)
     media = MediaStore(settings.media_root)
     service = EditorialService(engine, auth, media, transport, settings.download_limit_bytes,
-                               catalog_database_url=getattr(settings, "catalog_database_url", None))
+                               catalog_database_url=getattr(settings, "catalog_database_url", None),
+                               production_execution_scope=scope,
+                               execution_authorization_loader=(lambda: Authorization.load(settings)) if scope is not None else None)
     with engine.connect() as connection:
         check_schema(connection)
     service.recover_replies()

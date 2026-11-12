@@ -1,4 +1,4 @@
-"""Isolated-only transactional prototype. No default engine, CLI or Telegram route."""
+"""Transactional applicator; isolated by default, exact production capability required otherwise."""
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -89,11 +89,12 @@ def initialize_receipts_for_isolated_tests(engine, *, isolated_root):
 
 
 def apply_commercial_update(engine, *, editorial_database, isolated_root, draft_id,
-                            case_id, revision, approval, authorization, chat_id, user_id, transaction_guard=None):
+                            case_id, revision, approval, authorization, chat_id, user_id, transaction_guard=None,
+                            production_scope=None):
     """Load trusted source records under SQLite locks; apply and receipt in main DB.
 
     The supplied Authorization must come from trusted configuration, not a client.
-    This prototype refuses repository/atlas.db storage even if permission is granted.
+    Without a production capability, repository/atlas.db storage is always refused.
     """
     try:
         if not isinstance(authorization, Authorization) or not authorization.allows(chat_id, user_id, PERMISSION) \
@@ -104,8 +105,15 @@ def apply_commercial_update(engine, *, editorial_database, isolated_root, draft_
         case_id = str(UUID(str(case_id)))
         if type(revision) is not int or revision <= 0 or approval.revision != revision or str(approval.case_id) != case_id:
             raise ApplicationError('approval_revision_mismatch')
-        target = _catalog_path(engine, isolated_root)
-        source = _isolated_path(editorial_database, isolated_root)
+        if production_scope is None:
+            target = _catalog_path(engine, isolated_root)
+            source = _isolated_path(editorial_database, isolated_root)
+        else:
+            from app.editorial.production_execution import validate_production_scope
+            validate_production_scope(production_scope,catalog_engine=engine,editorial_database=editorial_database)
+            if not callable(transaction_guard):
+                raise ApplicationError('production_transaction_guard_required')
+            target, source = Path(production_scope.allowlist[1][0]), Path(production_scope.allowlist[0][0])
         if source.samefile(target):
             raise ApplicationError('separate_editorial_source_required')
         with engine.connect() as connection:

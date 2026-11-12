@@ -1,4 +1,4 @@
-"""Durable execution requests; execution capability exists only for exact temporary files."""
+"""Durable execution requests with isolated or explicitly file-bound production capability."""
 from copy import deepcopy
 from dataclasses import dataclass, field
 from dataclasses import asdict
@@ -19,6 +19,7 @@ from app.editorial.commercial_preparation import _validated_inputs
 from app.editorial.config import Authorization
 from app.editorial.models import Interview, Draft
 from app.editorial import draft_lifecycle
+from app.editorial.production_execution import ProductionExecutionScope, validate_production_scope, validate_request
 
 TTL = timedelta(minutes=15)
 LEASE = timedelta(seconds=60)
@@ -38,10 +39,13 @@ def _json(value):
 def _binding(request):
     keys = ('id','draft_id','chat','operator','case_id','revision','beer_id','action_id','approval','request_sha256',
             'catalog_binding','approved_at','expires_at','expected_changes','response_update_id')
-    return sha256(_json({key:request[key] for key in keys}).encode()).hexdigest()
+    values = {key:request[key] for key in keys}
+    if 'production_activation' in request:
+        values['production_activation'] = request['production_activation']
+    return sha256(_json(values).encode()).hexdigest()
 
 
-def enqueue(state, draft, review, prepared, *, update_id=None):
+def enqueue(state, draft, review, prepared, *, update_id=None, production_activation=None):
     """Only called after final authenticated confirmation; committed by Editorial inbox transaction."""
     now = utcnow()
     approval = CommercialApproval.model_validate(review['approval'])
@@ -56,6 +60,8 @@ def enqueue(state, draft, review, prepared, *, update_id=None):
                    expected_changes=[asdict(change) for change in prepared.changes],response_update_id=update_id,
                    state='pending',attempts=0,retryable=True,error_code=None,lease_token=None,lease_until=None,
                    next_attempt_at=None,receipt_id=None)
+    if production_activation is not None:
+        request['production_activation'] = production_activation
     request['binding_sha256'] = _binding(request)
     requests = deepcopy(state.history.get('execution_requests',{}))
     if request['id'] in requests:
@@ -95,6 +101,9 @@ def allow_isolated_execution(editorial_engine,catalog_engine,*,temporary_directo
 
 
 def validate_scope(scope):
+    if type(scope) is ProductionExecutionScope:
+        validate_production_scope(scope)
+        return None
     if type(scope) is not IsolatedExecutionScope or scope.seal is not _SEAL:
         raise ValueError('isolated_execution_disabled')
     root = Path(scope.temporary.name).resolve(strict=True)
@@ -167,30 +176,35 @@ def _finish(scope,draft_id,request_id,status,*,receipt=None,error=None,retryable
             reply = db.scalar(select(Reply).where(Reply.update_id==request.get('response_update_id'),Reply.draft_id==draft_id,
                                                 Reply.chat_id==request['chat'],Reply.state=='pending'))
             if reply:
-                reply.text = f'Solicitud: {status}. No se ha verificado un recibo de aplicación. ' + ('El reintento requiere el ejecutor aislado.' if retryable else 'No se reintentará automáticamente.')
+                reply.text = f'Solicitud {request_id}: {status}. No se ha verificado un recibo de aplicación. ' + ('Usa /recuperar22 con este ID para solicitar un reintento controlado.' if retryable else 'No se reintentará automáticamente.')
                 reply.markup, reply.is_prompt = None, False
         db.commit()
     return status
 
 
-def _authorized(loader,request):
+def _authorized(loader,request,*,require_base=False):
     try:
         auth = loader()
     except Exception:
         raise ApplicationError('authorization_unavailable') from None
     if not isinstance(auth,Authorization) or not auth.allows(request['chat'],request['operator'],'beer.edit') \
-            or not auth.allows(request['chat'],request['operator'],PERMISSION):
+            or not auth.allows(request['chat'],request['operator'],PERMISSION) \
+            or (require_base and not auth.allows(request['chat'],request['operator'])):
         raise ApplicationError('unauthorized')
     return auth
 
 
 def execute_request(scope,*,draft_id,request_id,authorization_loader,clock=utcnow):
-    """Explicit post-commit boundary. No normal worker/configuration enables this function."""
+    """Post-commit boundary; production requires a separately enabled exact-target capability."""
     root = validate_scope(scope)
     checked_out = getattr(scope.editorial_engine.pool,'checkedout',lambda:0)
     if checked_out():
         raise ValueError('editorial_session_must_be_closed')
     request = _load(scope,draft_id,request_id)
+    production = type(scope) is ProductionExecutionScope
+    if production:
+        validate_request(scope,request)
+        _authorized(authorization_loader,request,require_base=True)
     # An interrupted process may have committed SQL before reconciling Editorial.
     try:
         receipt = _read_receipt(scope,request)
@@ -229,12 +243,14 @@ def execute_request(scope,*,draft_id,request_id,authorization_loader,clock=utcno
         validate_scope(scope)
         if request['catalog_binding']!=sha256(scope.allowlist[1][0].encode()).hexdigest():
             raise ApplicationError('catalog_binding_mismatch')
-        auth=_authorized(authorization_loader,request)
+        auth=_authorized(authorization_loader,request,require_base=production)
 
         def transaction_guard(connection):
             validate_scope(scope)
             raw=connection.exec_driver_sql('SELECT history FROM editorial_source.editorial_interviews WHERE id=?',(draft_id,)).scalar_one()
             stored=json.loads(raw)['execution_requests'][request_id]
+            if production:
+                validate_request(scope,stored)
             if stored['binding_sha256']!=_binding(stored) or stored['binding_sha256']!=request['binding_sha256'] \
                     or stored['state']!='executing' or stored['lease_token']!=request['lease_token']:
                 raise ApplicationError('execution_lease_or_binding_changed')
@@ -242,12 +258,13 @@ def execute_request(scope,*,draft_id,request_id,authorization_loader,clock=utcno
                 raise ApplicationError('approval_expired')
             if clock()>=datetime.fromisoformat(stored['lease_until']):
                 raise ApplicationError('execution_lease_expired')
-            _authorized(authorization_loader,stored)
+            _authorized(authorization_loader,stored,require_base=production)
 
+        production_options = {'production_scope':scope} if production else {}
         apply_commercial_update(scope.catalog_engine,editorial_database=scope.allowlist[0][0],isolated_root=root,
                                 draft_id=draft_id,case_id=request['case_id'],revision=request['revision'],
                                 approval=request['approval'],authorization=auth,chat_id=request['chat'],user_id=request['operator'],
-                                transaction_guard=transaction_guard)
+                                transaction_guard=transaction_guard,**production_options)
         receipt=_read_receipt(scope,request)
         if not receipt:
             raise ApplicationError('persisted_receipt_missing')

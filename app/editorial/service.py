@@ -58,6 +58,9 @@ def project_update(raw, auth):
         value["invalid_attachment"] = "Envía el archivo directamente como respuesta al bot, sin reenviarlo. Tu borrador sigue aquí."
         return value
     text = message.get("text", "")
+    if isinstance(text,str) and (recovery := re.fullmatch(r'/recuperar22(?:@[A-Za-z0-9_]{5,32})? ([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})',text.strip())):
+        value.update(command='/recuperar22',request_id=recovery.group(1))
+        return value
     if isinstance(text, str) and re.fullmatch(r"/(?:obra|vista|cancelar|entrevista|continuar|resumen|corregir|carta22|nueva22|editar22|rapido22|borradores22|aplicar22|recibo22)(?:@[A-Za-z0-9_]{5,32})?", text.strip()):
         value["command"] = text.strip().split("@")[0]
         return value
@@ -88,16 +91,19 @@ def project_update(raw, auth):
 
 class EditorialService:
     def __init__(self, engine, auth, media, transport, download_limit, *, catalog_database_url=None,
-                 isolated_execution_scope=None, execution_authorization_loader=None):
+                 isolated_execution_scope=None, execution_authorization_loader=None, production_execution_scope=None):
         self.engine, self.auth, self.media, self.transport = engine, auth, media, transport
         self.download_limit = download_limit
         self.catalog_database_url = catalog_database_url
+        if isolated_execution_scope is not None and production_execution_scope is not None:
+            raise ValueError('Conflicting execution scopes')
         self.isolated_execution_scope = isolated_execution_scope
+        self.execution_scope = production_execution_scope or isolated_execution_scope
         self.execution_authorization_loader = execution_authorization_loader
-        if isolated_execution_scope is not None:
+        if self.execution_scope is not None:
             from app.editorial.commercial_execution import validate_scope
-            validate_scope(isolated_execution_scope)
-            if isolated_execution_scope.editorial_engine is not engine or not callable(execution_authorization_loader):
+            validate_scope(self.execution_scope)
+            if self.execution_scope.editorial_engine is not engine or not callable(execution_authorization_loader):
                 raise ValueError('Invalid isolated execution boundary')
         self._summary_ids = set()  # Best-effort response deduplication; never persisted.
         self.readonly_offset = 0
@@ -241,6 +247,7 @@ class EditorialService:
                 transient = True
         cleanup_messages = []
         execution_candidate = None
+        recovery_requested = False
         with Session(self.engine) as db:
             db.connection().exec_driver_sql("BEGIN IMMEDIATE")
             item = db.get(Update, uid)
@@ -271,10 +278,29 @@ class EditorialService:
                 draft_lifecycle.set_legacy_steps(state, [])
                 draft.revision += 1
                 draft.prompt_message_id = None
-            if command in {'/aplicar22','/recibo22'} or payload.get('callback','').startswith('a22:'):
+            if command == '/recuperar22':
+                from app.editorial.commercial_execution import _request, _authorized
+                from app.editorial.production_execution import ProductionExecutionScope, validate_request
+                try:
+                    if self.execution_scope is None or draft is None:
+                        raise ValueError('execution_disabled')
+                    _, request = _request(db,draft.id,payload['request_id'])
+                    if (request['chat'],request['operator']) != (payload['chat'],payload['user']):
+                        raise ValueError('request_owner_mismatch')
+                    _authorized(self.execution_authorization_loader,request,require_base=type(self.execution_scope) is ProductionExecutionScope)
+                    if type(self.execution_scope) is ProductionExecutionScope:
+                        validate_request(self.execution_scope,request)
+                    execution_candidate = (draft.id,payload['request_id'])
+                    recovery_requested = True
+                    text, markup, asset_id, prompt = 'Recuperación solicitada; aplicación aún no verificada.',None,None,False
+                except (ValueError,KeyError,TypeError):
+                    text, markup, asset_id, prompt = 'No se puede recuperar esta solicitud: ejecución deshabilitada, autorización ausente o solicitud no vigente.',None,None,False
+            elif command in {'/aplicar22','/recibo22'} or payload.get('callback','').startswith('a22:'):
+                from app.editorial.production_execution import activation
                 text, markup, asset_id, prompt = commercial_approval_flow.handle(
                     db,draft,payload,self.auth,self.catalog_database_url,update_id=uid,
-                    isolated_execution_enabled=self.isolated_execution_scope is not None)
+                    isolated_execution_enabled='production' if activation(self.execution_scope) else self.execution_scope is not None,
+                    production_activation=activation(self.execution_scope))
                 if draft and payload.get('callback','').endswith(':confirm'):
                     execution_state = db.get(Interview,draft.id)
                     execution_history = execution_state.history if execution_state and isinstance(execution_state.history,dict) else {}
@@ -465,11 +491,22 @@ class EditorialService:
                 self.transport.answer_callback(payload["callback_id"])
             except TransportError:
                 pass  # Callback acknowledgement cannot undo a committed draft.
-        if execution_candidate and self.isolated_execution_scope is not None:
-            from app.editorial.commercial_execution import execute_request
+        if execution_candidate and self.execution_scope is not None:
+            from app.editorial.commercial_execution import execute_request, _load, _read_receipt
             # Editorial Session/transaction above have both ended before acquiring execution locks.
-            execute_request(self.isolated_execution_scope,draft_id=execution_candidate[0],request_id=execution_candidate[1],
-                            authorization_loader=self.execution_authorization_loader)
+            try:
+                result = execute_request(self.execution_scope,draft_id=execution_candidate[0],request_id=execution_candidate[1],
+                                         authorization_loader=self.execution_authorization_loader)
+                receipt = _read_receipt(self.execution_scope,_load(self.execution_scope,*execution_candidate)) if result=='applied' else None
+                outcome = f"Aplicación verificada · recibo {receipt['application_id']} · UTC: {receipt['applied_at']}" if receipt else f'Solicitud: {result}. No se ha verificado una aplicación.'
+            except (ValueError,OSError):
+                outcome = 'No se pudo verificar la ejecución. Conserva el UUID; revisa el recibo antes de reintentar.'
+            if recovery_requested:
+                with Session(self.engine) as recovery_db:
+                    response = recovery_db.scalar(select(Reply).where(Reply.update_id==uid,Reply.chat_id==payload['chat'],Reply.state=='pending'))
+                    if response:
+                        response.text = outcome
+                    recovery_db.commit()
         return True
 
     def recover_replies(self):
