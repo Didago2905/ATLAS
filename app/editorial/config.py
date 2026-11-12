@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
 REPO = Path(__file__).resolve().parents[2]
-KNOWN_PERMISSIONS = {"artwork.submit", "beer.create", "beer.edit", "event.prepare"}
+KNOWN_PERMISSIONS = {"artwork.submit", "beer.create", "beer.edit", "beer.commercial.apply", "event.prepare"}
 STORAGE = REPO / "data/editorial"
 
 

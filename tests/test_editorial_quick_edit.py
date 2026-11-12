@@ -43,7 +43,7 @@ class QuickEditTests(unittest.TestCase):
         self.assertTrue(self.state()['commercial']['quick'])
         self.assertTrue(self.state()['commercial']['review'])
         buttons = self.transport.sent[-1]['markup']['inline_keyboard']
-        self.assertEqual(sum(':e' in row[0]['callback_data'] for row in buttons), 13)
+        self.assertEqual(sum(row[0]['callback_data'].rsplit(':', 1)[-1].startswith('e') for row in buttons), 13)
         self.assertIn('No hay cambios efectivos', self.transport.sent[-1]['text'])
         self.assertNotIn('conservar Cyprez', self.transport.sent[-1]['text'])
         self.assertTrue(all(len(row[0]['callback_data'].encode()) <= 64 for row in buttons))

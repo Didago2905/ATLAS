@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.editorial.models import Cursor, Update, Asset, Draft, Version, Reply, Interview
 from app.editorial import interview, carta_identity, commercial_interview
 from app.editorial import draft_lifecycle
+from app.editorial import commercial_approval_flow
 from app.editorial.draft_lifecycle import INACTIVE
 from app.editorial.proposal import Proposal, validate_proposal
 from app.editorial.telegram import DownloadLimit, TransportError
@@ -46,7 +47,7 @@ def project_update(raw, auth):
     value = {"chat": chat["id"], "user": actor["id"]}
     if isinstance(callback, dict):
         data = callback.get("data")
-        if not isinstance(data, str) or not re.fullmatch(r"(?:(?:op|start):[a-f0-9]{32}:[0-9]{1,9}:(?:new|art|fix|board|event)|i:[a-f0-9]{32}:[0-9]{1,9}:(?:[0-9]{1,2}|back|skip|summary|edit|resume)|c22:[a-f0-9]{32}:[0-9]{1,9}:[0-9]{1,9}:(?:[0-2]|r|x)|b22:[a-f0-9]{32}:[0-9]{1,9}:[0-9]{1,9}:(?:[kscubvdxfh]|e(?:[0-9]|1[0-2]))|r22:(?:[a-f0-9]{32}:[0-9]{1,9}|list:[0-9]{1,6}))", data):
+        if not isinstance(data, str) or not re.fullmatch(r"(?:(?:op|start):[a-f0-9]{32}:[0-9]{1,9}:(?:new|art|fix|board|event)|i:[a-f0-9]{32}:[0-9]{1,9}:(?:[0-9]{1,2}|back|skip|summary|edit|resume)|c22:[a-f0-9]{32}:[0-9]{1,9}:[0-9]{1,9}:(?:[0-2]|r|x)|b22:[a-f0-9]{32}:[0-9]{1,9}:[0-9]{1,9}:(?:[kscubvdxfh]|e(?:[0-9]|1[0-2]))|r22:(?:[a-f0-9]{32}:[0-9]{1,9}|list:[0-9]{1,6})|a22:(?:[a-f0-9]{32}:[0-9]{1,9}:review|[a-f0-9]{32}:(?:confirm|p[0-9]{1,3})))", data):
             return {"ignore": True}
         value["callback"] = data
         callback_id = callback.get("id")
@@ -57,7 +58,7 @@ def project_update(raw, auth):
         value["invalid_attachment"] = "Envía el archivo directamente como respuesta al bot, sin reenviarlo. Tu borrador sigue aquí."
         return value
     text = message.get("text", "")
-    if isinstance(text, str) and re.fullmatch(r"/(?:obra|vista|cancelar|entrevista|continuar|resumen|corregir|carta22|nueva22|editar22|rapido22|borradores22)(?:@[A-Za-z0-9_]{5,32})?", text.strip()):
+    if isinstance(text, str) and re.fullmatch(r"/(?:obra|vista|cancelar|entrevista|continuar|resumen|corregir|carta22|nueva22|editar22|rapido22|borradores22|aplicar22|recibo22)(?:@[A-Za-z0-9_]{5,32})?", text.strip()):
         value["command"] = text.strip().split("@")[0]
         return value
     reply = message.get("reply_to_message")
@@ -86,10 +87,18 @@ def project_update(raw, auth):
 
 
 class EditorialService:
-    def __init__(self, engine, auth, media, transport, download_limit, *, catalog_database_url=None):
+    def __init__(self, engine, auth, media, transport, download_limit, *, catalog_database_url=None,
+                 isolated_execution_scope=None, execution_authorization_loader=None):
         self.engine, self.auth, self.media, self.transport = engine, auth, media, transport
         self.download_limit = download_limit
         self.catalog_database_url = catalog_database_url
+        self.isolated_execution_scope = isolated_execution_scope
+        self.execution_authorization_loader = execution_authorization_loader
+        if isolated_execution_scope is not None:
+            from app.editorial.commercial_execution import validate_scope
+            validate_scope(isolated_execution_scope)
+            if isolated_execution_scope.editorial_engine is not engine or not callable(execution_authorization_loader):
+                raise ValueError('Invalid isolated execution boundary')
         self._summary_ids = set()  # Best-effort response deduplication; never persisted.
         self.readonly_offset = 0
 
@@ -231,6 +240,7 @@ class EditorialService:
             except TransportError:
                 transient = True
         cleanup_messages = []
+        execution_candidate = None
         with Session(self.engine) as db:
             db.connection().exec_driver_sql("BEGIN IMMEDIATE")
             item = db.get(Update, uid)
@@ -261,7 +271,18 @@ class EditorialService:
                 draft_lifecycle.set_legacy_steps(state, [])
                 draft.revision += 1
                 draft.prompt_message_id = None
-            if command == "/borradores22" or payload.get('callback', '').startswith('r22:list:'):
+            if command in {'/aplicar22','/recibo22'} or payload.get('callback','').startswith('a22:'):
+                text, markup, asset_id, prompt = commercial_approval_flow.handle(
+                    db,draft,payload,self.auth,self.catalog_database_url,update_id=uid,
+                    isolated_execution_enabled=self.isolated_execution_scope is not None)
+                if draft and payload.get('callback','').endswith(':confirm'):
+                    execution_state = db.get(Interview,draft.id)
+                    execution_history = execution_state.history if execution_state and isinstance(execution_state.history,dict) else {}
+                    review = execution_history.get('application_review',{})
+                    request = execution_history.get('execution_requests',{}).get(review.get('request_id'),{})
+                    if request.get('response_update_id') == uid:
+                        execution_candidate = (draft.id,review['request_id'])
+            elif command == "/borradores22" or payload.get('callback', '').startswith('r22:list:'):
                 offset = int(payload['callback'].split(':')[2]) if payload.get('callback') else 0
                 text, markup, asset_id, prompt = draft_lifecycle.listing(db, draft, self.auth, offset=offset)
             elif payload.get('callback', '').startswith('r22:'):
@@ -444,6 +465,11 @@ class EditorialService:
                 self.transport.answer_callback(payload["callback_id"])
             except TransportError:
                 pass  # Callback acknowledgement cannot undo a committed draft.
+        if execution_candidate and self.isolated_execution_scope is not None:
+            from app.editorial.commercial_execution import execute_request
+            # Editorial Session/transaction above have both ended before acquiring execution locks.
+            execute_request(self.isolated_execution_scope,draft_id=execution_candidate[0],request_id=execution_candidate[1],
+                            authorization_loader=self.execution_authorization_loader)
         return True
 
     def recover_replies(self):

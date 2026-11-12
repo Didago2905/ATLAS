@@ -4,7 +4,7 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from app.editorial import interview
-from app.editorial.draft_lifecycle import INACTIVE, archive, close
+from app.editorial.draft_lifecycle import INACTIVE, archive, close, execution_requests
 from app.editorial.candidate_lookup import lookup_beers, CandidateLookupError
 from app.editorial.models import Draft, Interview, ProposalRevision, Reply
 from app.editorial.navigation_v22 import NavigationState, CallbackContext, assert_callback, start_navigation, reconcile_paths
@@ -42,12 +42,14 @@ def begin(db, draft, chat, user):
     if state and isinstance(state.history, dict) and state.history.get('phase') == 'commercial' and draft.state in INACTIVE:
         close(db, draft, status=draft.state)
     saved = archive(state)
+    requests = execution_requests(state)
     if state is None:
         state = Interview(id=draft.id, step="v2.2", revision=revision, history={})
         db.add(state)
     state.step = "v2.2"
     state.history = {"flow": "carta_identity", "operation": "carta", "phase": "name",
-                     "navigation": start_navigation(proposal).model_dump(mode="json"), "candidates": [], "saved_cases": saved}
+                     "navigation": start_navigation(proposal).model_dump(mode="json"), "candidates": [], "saved_cases": saved,
+                     "execution_requests":requests}
     draft.state, draft.prompt_message_id = "draft", None
     _store(db, draft, state, proposal)
     return draft, render(db, draft)

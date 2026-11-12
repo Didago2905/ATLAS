@@ -15,13 +15,19 @@ def archive(state):
     return deepcopy(state.history.get("saved_cases", {})) if state and isinstance(state.history, dict) else {}
 
 
+def execution_requests(state):
+    return deepcopy(state.history.get('execution_requests',{})) if state and isinstance(state.history,dict) else {}
+
+
 def legacy_steps(state):
     return state.history.get("steps", []) if isinstance(state.history, dict) else state.history
 
 
 def set_legacy_steps(state, steps):
     saved = archive(state)
-    state.history = {"flow": "legacy_with_saved", "steps": steps, "saved_cases": saved} if saved else steps
+    requests = execution_requests(state)
+    state.history = {"flow": "legacy_with_saved", "steps": steps, "saved_cases": saved,
+                     "execution_requests":requests} if saved or requests else steps
 
 
 def case_latest(db, draft_id, case_id):
@@ -50,6 +56,7 @@ def close(db, draft, *, status):
     saved = archive(state)
     context = deepcopy(data)
     context.pop('saved_cases', None)
+    context.pop('execution_requests', None)
     saved[str(proposal.case_id)] = {'context': context, 'revision': proposal.revision, 'status': status}
     state.history = {**data, 'saved_cases': saved}
     draft.state, draft.prompt_message_id = status, None
@@ -107,7 +114,7 @@ def reopen(db, draft, token, auth):
     context['commercial'].update(review=True, awaiting=False)
     context['navigation'] = nav.model_dump(mode='json')
     state.step, state.revision = 'v2.2', proposal.revision
-    state.history = {**context, 'saved_cases': saved_cases}
+    state.history = {**context, 'saved_cases': saved_cases, 'execution_requests':execution_requests(state)}
     draft.state, draft.prompt_message_id = 'draft', None
     from app.editorial.commercial_interview import render
     return render(db, draft)
