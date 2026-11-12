@@ -150,6 +150,14 @@ class ApplicatorTests(unittest.TestCase):
         self.assertEqual(first.receipt, second.receipt)
         self.assertEqual(len(self.receipt_rows()), 1)
 
+    def test_commercial_application_preserves_tap_entry_timestamp(self):
+        self.setup_application()
+        with self.target.begin() as db:
+            db.exec_driver_sql('ALTER TABLE beers ADD COLUMN tap_entered_at DATETIME')
+            db.exec_driver_sql("UPDATE beers SET tap_entered_at='2026-01-01 00:00:00' WHERE id=1")
+        self.apply()
+        self.assertEqual(self.beer()['tap_entered_at'],'2026-01-01 00:00:00')
+
     def test_concurrent_same_application_is_applied_once(self):
         self.setup_application()
         # Precompute all source arguments: test helpers must not share ORM sessions across threads.

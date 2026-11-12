@@ -96,6 +96,25 @@ test("TapGrid caps and fills exactly 16 slots with a 3/4 aspect ratio", async ({
     for (const ratio of ratios) expect(ratio).toBeCloseTo(0.75, 2);
 });
 
+test("Tap entry ordering keeps featured positions and alternative sort modes", async ({ page }) => {
+    const items = [
+        { ...beers[0], id: 1, name: "Zulu", tap_position: 1, tap_entered_at: null },
+        { ...beers[1], id: 2, name: "Alpha", tap_position: 2, tap_entered_at: "2026-01-01T00:00:00" },
+        { ...beers[2], id: 3, name: "Bravo", tap_position: 7, tap_entered_at: null },
+        { ...beers[2], id: 4, name: "Delta", tap_position: 3, tap_entered_at: "2026-03-01T00:00:00" },
+        { ...beers[0], id: 5, name: "Echo", tap_position: 5, tap_entered_at: "2026-02-01T00:00:00" },
+    ];
+    await openHome(page, items);
+    const sort = page.getByRole("combobox", { name: "Orden" });
+    await expect.poll(() => cardIds(page)).toEqual(["4", "3", "5", "2", "1"]);
+    await sort.selectOption("name");
+    await expect.poll(() => cardIds(page)).toEqual(["2", "3", "4", "5", "1"]);
+    await sort.selectOption("abv");
+    await expect.poll(() => cardIds(page)).toEqual(["2", "3", "4", "1", "5"]);
+    await sort.selectOption("style");
+    await expect.poll(() => cardIds(page)).toEqual(["3", "4", "2", "1", "5"]);
+});
+
 test("loading skeletons retain 16 slots with a 3/4 aspect ratio", async ({ page }) => {
     await page.route("**/api/public/tap", async route => {
         await new Promise(resolve => setTimeout(resolve, 1_000));

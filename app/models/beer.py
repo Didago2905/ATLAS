@@ -26,6 +26,7 @@ class Beer(Base):
 
     # 🔥 NUEVO → control del tap
     tap_position = Column(Integer, nullable=True)
+    tap_entered_at = Column(DateTime, nullable=True)
 
     # ⭐ FEATURED SYSTEM
     is_featured = Column(Boolean, default=False, nullable=False)

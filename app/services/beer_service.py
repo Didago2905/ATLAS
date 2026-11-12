@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from app.models.beer import Beer
@@ -11,6 +12,33 @@ from app.schemas.beer import (
 
 import json
 import os
+
+
+def _lock_tap(db):
+    # Serialize SQLite capacity checks BEFORE reading availability or positions.
+    connection = db.connection()
+    if connection.dialect.name == 'sqlite':
+        if connection.connection.driver_connection.in_transaction:
+            raise HTTPException(409, 'Tap change requires a fresh transaction')
+        connection.exec_driver_sql('BEGIN IMMEDIATE')
+
+
+def _inside_tap(beer):
+    return beer.is_available is True and beer.is_deleted is False and beer.tap_position is not None
+
+
+def _record_tap_entry(db, beer, was_inside):
+    if was_inside or not _inside_tap(beer):
+        return
+    with db.no_autoflush:
+        query = db.query(Beer).filter(Beer.is_available == True, Beer.is_deleted == False,
+                                     Beer.tap_position != None)
+        if beer.id is not None:
+            query = query.filter(Beer.id != beer.id)
+        if query.count() >= 16:
+            db.rollback()
+            raise HTTPException(400, 'Tap lleno (16 cervezas máximo)')
+    beer.tap_entered_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def soft_delete_beer(db: Session, beer_id: int):
@@ -28,6 +56,7 @@ def soft_delete_beer(db: Session, beer_id: int):
 
 
 def create_beer(db: Session, beer_data: BeerCreate):
+    _lock_tap(db)
     data = beer_data.dict()
 
     # Asegurar defaults
@@ -38,6 +67,7 @@ def create_beer(db: Session, beer_data: BeerCreate):
         data["is_deleted"] = False
 
     new_beer = Beer(**data)
+    _record_tap_entry(db, new_beer, False)
 
     db.add(new_beer)
     db.commit()
@@ -47,12 +77,15 @@ def create_beer(db: Session, beer_data: BeerCreate):
 
 
 def update_beer(db: Session, beer_id: int, beer_data: BeerUpdate):
-    beer = db.query(Beer).filter(Beer.id == beer_id).first()
+    if 'is_available' in beer_data.model_fields_set:
+        _lock_tap(db)
+    beer = db.query(Beer).populate_existing().filter(Beer.id == beer_id).first()
 
     if not beer:
         raise HTTPException(status_code=404, detail="Beer not found")
 
     update_data = beer_data.dict(exclude_unset=True)
+    was_inside = _inside_tap(beer)
     print("SERVICE UPDATE DATA:", update_data)
 
     # ❌ evitar que frontend rompa tap_position
@@ -72,6 +105,7 @@ def update_beer(db: Session, beer_id: int, beer_data: BeerUpdate):
                 next_pos = get_next_tap_position(db)
 
                 if next_pos is None:
+                    db.rollback()
                     raise HTTPException(
                         status_code=400, detail="Tap lleno (16 cervezas máximo)"
                     )
@@ -83,6 +117,8 @@ def update_beer(db: Session, beer_id: int, beer_data: BeerUpdate):
 
             beer.tap_position = None
             print("REMOVED FROM TAP")
+
+    _record_tap_entry(db, beer, was_inside)
 
         # ⭐ persistencia featured beers
     if "is_featured" in update_data:
@@ -113,12 +149,15 @@ def update_beer(db: Session, beer_id: int, beer_data: BeerUpdate):
 def update_availability(
     db: Session, beer_id: int, availability_data: BeerAvailabilityUpdate
 ):
-    beer = db.query(Beer).filter(Beer.id == beer_id).first()
+    _lock_tap(db)
+    beer = db.query(Beer).populate_existing().filter(Beer.id == beer_id).first()
 
     if not beer:
         raise HTTPException(status_code=404, detail="Beer not found")
 
+    was_inside = _inside_tap(beer)
     beer.is_available = availability_data.is_available
+    _record_tap_entry(db, beer, was_inside)
 
     db.commit()
     db.refresh(beer)

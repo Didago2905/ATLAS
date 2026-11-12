@@ -5,6 +5,7 @@ import { audit } from "../utils/audit";
 import { createTapTimingLab } from "../diagnostics/tapTimingLab";
 import TapTimingLabPanel from "../diagnostics/TapTimingLabPanel";
 import BeerPeek from "./BeerPeek";
+import { compareTapBeers } from "../catalog/tapOrder";
 
 const PEEK_HOLD_MS = 500;
 const PEEK_MOVE_PX = 10;
@@ -145,10 +146,7 @@ export default function TapGrid({ sort, onCardAccepted, tutorialStep }) {
         if (sort === "abv") return (b.abv || 0) - (a.abv || 0);
         if (sort === "name") return a.name.localeCompare(b.name);
         if (sort === "style") return a.style.localeCompare(b.style);
-        if (a.is_featured && !b.is_featured) return -1;
-        if (!a.is_featured && b.is_featured) return 1;
-
-        return (a.tap_position || 999) - (b.tap_position || 999);
+        return compareTapBeers(a, b);
     });
 
     // 🔥 TAP FIJO (16)

@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, Dict
+from datetime import datetime
 
 
 class BeerCreate(BaseModel):
@@ -39,6 +40,7 @@ class BeerResponse(BaseModel):
     is_featured: Optional[bool] = False
 
     tap_position: Optional[int]  # 🔥 NUEVO
+    tap_entered_at: Optional[datetime] = None
 
     featured_updated_at: Optional[int] = None
 
